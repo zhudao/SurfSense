@@ -1,14 +1,16 @@
-name: Local Desktop Release
+name: Desktop Release
 
-# Builds the community-local desktop app (surfsense_local) into per-OS installers
-# and attaches them to a GitHub Release.
+# Builds the desktop app (surfsense_local) into per-OS installers and attaches
+# them to a GitHub Release on the `stable` channel. The legacy 0.0.x desktop
+# reads `latest*.yml`, which no release publishes anymore, so it never updates.
 #
-# Trigger: push a tag like `local-v0.0.1`. Or run manually for a dry run.
+# Trigger: push a tag like `v2.0.0`, matching surfsense_local/VERSION. Or run
+# manually for a dry run.
 
 on:
   push:
     tags:
-      - "local-v*"
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
@@ -38,14 +40,11 @@ jobs:
             platform: --linux
             electron_cache: ~/.cache/electron
             llmfit_resource: release/linux-unpacked/resources/llmfit/llmfit
-          - os: macos-15 # Apple Silicon → arm64 dmg
+          # Apple Silicon only: torch (2.3+) and onnxruntime (1.24+) no longer ship Intel Mac wheels.
+          - os: macos-15
             platform: --mac
             electron_cache: ~/Library/Caches/electron
             llmfit_resource: release/mac-arm64/SurfSense.app/Contents/Resources/llmfit/llmfit
-          - os: macos-15-intel # Intel → x64 dmg (the native backend can't cross-compile)
-            platform: --mac
-            electron_cache: ~/Library/Caches/electron
-            llmfit_resource: release/mac/SurfSense.app/Contents/Resources/llmfit/llmfit
           - os: windows-latest
             platform: --win
             electron_cache: ~\AppData\Local\electron\Cache
@@ -54,6 +53,13 @@ jobs:
     defaults:
       run:
         shell: bash
+
+    env:
+      # macOS's system Python has SQLite extension loading compiled out (same
+      # restriction Apple applies to its own system libsqlite3); sqlite_vec
+      # needs it. uv's own managed Python has it, so never let a PATH-found
+      # interpreter (e.g. from actions/setup-python) get used instead.
+      UV_PYTHON_PREFERENCE: only-managed
 
     steps:
       - name: Checkout
@@ -65,20 +71,27 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ inputs.version }}"
           else
-            VERSION="${GITHUB_REF#refs/tags/local-v}"
+            VERSION="${GITHUB_REF#refs/tags/v}"
           fi
           if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
             echo "::error::Version '$VERSION' is not semver (expected X.Y.Z); fix the tag."
             exit 1
+          fi
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TRACKED="$(tr -d '[:space:]' < surfsense_local/VERSION)"
+            if [ "$VERSION" != "$TRACKED" ]; then
+              echo "::error::Tag v$VERSION does not match surfsense_local/VERSION ($TRACKED); run surfsense_local/scripts/bump-version.sh and commit before tagging."
+              exit 1
+            fi
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Detect release signing eligibility
         id: sign
         run: |
-          # Sign only on production tag pushes (local-v*), reusing the org certs.
+          # Sign only on production tag pushes (v*), reusing the org certs.
           # Contributor forks and dry runs lack the secrets and build unsigned.
-          if [ "${{ github.event_name }}" = "push" ] && [[ "$GITHUB_REF" == refs/tags/local-v* ]]; then
+          if [ "${{ github.event_name }}" = "push" ] && [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "prod=true" >> "$GITHUB_OUTPUT"
           else
             echo "prod=false" >> "$GITHUB_OUTPUT"
@@ -97,20 +110,14 @@ jobs:
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" > /dev/null
 
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
       - name: Setup uv
         uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
+          python-version: "3.12"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
-        with:
-          version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -131,6 +138,11 @@ jobs:
         working-directory: surfsense_local/backend
         run: uv sync
 
+      - name: Refuse to build with the test signing key
+        working-directory: surfsense_local/backend
+        # addopts pins -m 'not packaging'; the later -m on the command line wins.
+        run: uv run pytest tests/packaging/test_license_key.py -m packaging
+
       - name: Freeze API + worker binaries
         working-directory: surfsense_local/backend
         run: uv run scripts/build_binaries.py
@@ -140,6 +152,27 @@ jobs:
           WORKER="./surfsense_local/backend/dist/worker/worker"
           if [ "$RUNNER_OS" = "Windows" ]; then WORKER="${WORKER}.exe"; fi
           "$WORKER" --check-vision-runtime
+
+      - name: Smoke the frozen API
+        run: |
+          set -e
+          API="./surfsense_local/backend/dist/api/api"
+          if [ "$RUNNER_OS" = "Windows" ]; then API="${API}.exe"; fi
+          export SURFSENSE_LOCAL_DATA_DIR="$RUNNER_TEMP/ss-api-smoke"
+          export SURFSENSE_LOCAL_PORT=8137
+          "$API" &
+          PID=$!
+          cleanup() { kill "$PID" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:8137/health" >/dev/null; then
+              echo "health OK"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::frozen API never became healthy"
+          exit 1
 
       - name: Stage embedding, voice, and Docling parser packs
         working-directory: surfsense_local/backend
@@ -246,6 +279,10 @@ jobs:
           name: surfsense-local-${{ matrix.os }}
           path: |
             surfsense_local/electron/release/*.AppImage
+            surfsense_local/electron/release/*.deb
             surfsense_local/electron/release/*.dmg
+            surfsense_local/electron/release/*.zip
             surfsense_local/electron/release/*.exe
+            surfsense_local/electron/release/*.blockmap
+            surfsense_local/electron/release/*.yml
           if-no-files-found: ignore
