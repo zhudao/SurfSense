@@ -4,7 +4,7 @@ One term per concept, so the app says the same thing everywhere. Terms marked wi
 
 ## Stays in English
 
-SurfSense, Studio, Markdown, llama.cpp, GGUF, Hugging Face, API, MCP, and every model and provider name.
+SurfSense, Studio, Markdown, llama.cpp, GGUF, Hugging Face, API, MCP, MCP's transports SSE and Streamable HTTP, the HTTP sign-in schemes Bearer and Basic, the package managers Scoop, AUR, Snap Store, Flatpak, Nix and apt, and every model and provider name.
 
 `workspace` is the one product word languages disagree on, and each keeps its own habit: German and Brazilian Portuguese write Workspace, because both say it routinely and the translation is three times as wide in the sidebar; Japanese writes ワークスペース, since `マイWorkspace` reads as a mistake; the rest translate it.
 
@@ -25,6 +25,7 @@ SurfSense, Studio, Markdown, llama.cpp, GGUF, Hugging Face, API, MCP, and every 
 | document | ドキュメント | 문서 | 文档 | दस्तावेज़ | Dokument | documento | document | documento | документ |
 | chat | チャット | 채팅 | 对话 | चैट | Chat | chat | chat | chat | чат |
 | reply (the model's answer to a message) | 返信 | 답변 | 回复 | जवाब | Antwort | respuesta | réponse | resposta | ответ |
+| post (on Reddit or Instagram) | 投稿 | 게시물 | 帖子 | पोस्ट | Beitrag | publicación | publication | publicação | пост |
 | agent (the assistant that works through steps and tools) | エージェント | 에이전트 | 智能体 | एजेंट | Agent | agente | agent | agente | агент |
 | Basic (the chat mode that answers from sources, written "Basic (Q&A)") | ベーシック | 기본 | 基础 | बेसिक | Basis | Básico | Basique | Básico | Базовый |
 | Agentic (the chat mode the agent runs; "Agentic mode" in a sentence) | エージェント | 에이전트 | 智能体 | एजेंटिक | Agentisch (im agentischen Modus) | Agéntico (modo agéntico) | Agentique (mode agentique) | Agêntico (modo agêntico) | Агентный (агентный режим) |
@@ -41,6 +42,10 @@ SurfSense, Studio, Markdown, llama.cpp, GGUF, Hugging Face, API, MCP, and every 
 | study guide | 学習ガイド | 학습 가이드 | 学习指南 | स्टडी गाइड | Lernzettel † | guía de estudio | Guide de révision | Guia de estudos | конспект |
 | podcast | ポッドキャスト | 팟캐스트 | 播客 | पॉडकास्ट | Podcast | podcast | Podcast | Podcast | подкаст |
 | speech (a model reading text aloud) | 音声合成 | 음성 | 语音 | वॉइस | Sprache | voz | voix | voz | речь |
+| speech recognition (turning recordings and the voice into text, on this computer) | 音声認識 | 음성 인식 | 语音识别 | स्पीच रिकग्निशन | Spracherkennung | reconocimiento de voz | reconnaissance vocale | reconhecimento de voz | распознавание речи |
+| voice input (dictating into the chat composer) | 音声入力 | 음성 입력 | 语音输入 | वॉइस इनपुट | Spracheingabe | entrada de voz | saisie vocale | entrada de voz | голосовой ввод |
+| transcript (a recording’s text) | 文字起こし | 스크립트 | 文字稿 | ट्रांसक्रिप्ट | Transkript | transcripción | transcription | transcrição | расшифровка |
+| recording (an audio file added as a source) | 録音 | 녹음 | 录音 | रिकॉर्डिंग | Aufnahme | grabación | enregistrement | gravação | запись |
 | sidebar (the workspace’s left column) | サイドバー | 사이드바 | 侧边栏 | साइडबार | Seitenleiste | barra lateral | barre latérale | barra lateral | боковая панель |
 | workspace | ワークスペース | 워크스페이스 | 工作区 | वर्कस्पेस | Workspace | espacio de trabajo | espace de travail | Workspace | рабочая область |
 | artifact (a Studio output) | 生成物 | 생성물 | 产物 | आर्टिफ़ैक्ट | Artefakt | artefacto | artefact | artefato | артефакт |
@@ -57,15 +62,30 @@ SurfSense, Studio, Markdown, llama.cpp, GGUF, Hugging Face, API, MCP, and every 
 | server (a model server) | サーバー | 서버 | 服务器 | सर्वर | Server | servidor | serveur | servidor | сервер |
 | provider | プロバイダー | 제공업체 | 提供商 | प्रोवाइडर | Anbieter | proveedor | fournisseur | provedor | провайдер |
 | this computer | このコンピューター | 이 컴퓨터 | 这台电脑 | यह कंप्यूटर | dieser Computer | este equipo | cet ordinateur | este computador | этот компьютер |
+| license key (the user’s key, which the app sends to SurfSense’s plugin service to be checked) | ライセンスキー | 라이선스 키 | 许可证密钥 | लाइसेंस कुंजी | Lizenzschlüssel | clave de licencia | clé de licence | chave de licença | лицензионный ключ |
+| usage statistics (the opt-in daily and weekly report of counts in ranges) | 利用統計 | 사용 통계 | 使用统计 | उपयोग आंकड़े | Nutzungsstatistiken | estadísticas de uso | statistiques d’utilisation | estatísticas de uso | статистика использования |
 | retry | 再試行 | 다시 시도 | 重试 | फिर से कोशिश करें | Erneut versuchen | Reintentar | Réessayer | Tentar novamente | Повторить |
+| plugin (an MCP server whose tools the agent can use) | プラグイン | 플러그인 | 插件 | प्लगइन | Plugin | plugin | plugin | plugin | плагин |
+| third-party (a plugin SurfSense does not publish) | サードパーティ | 서드파티 | 第三方 | थर्ड-पार्टी | Drittanbieter- | de terceros | tiers | de terceiros | сторонний |
+| custom (a plugin added by its URL) | カスタム | 사용자 지정 | 自定义 | कस्टम | Eigenes | personalizado | personnalisé | personalizado | свой |
+| tool (one action a plugin offers the agent) | ツール | 도구 | 工具 | टूल | Tool | herramienta | outil | ferramenta | инструмент |
 | View (menu) | 表示 | 보기 | 视图 | देखें | Darstellung | Ver | Affichage | Exibir | Вид |
 | report an issue | 問題を報告 | 문제 신고 | 报告问题 | समस्या रिपोर्ट करें | Problem melden | informar de un problema | signaler un problème | relatar um problema | сообщить о проблеме |
 | session log | セッションログ | 세션 로그 | 会话日志 | सेशन लॉग | Sitzungsprotokoll | registro de la sesión | journal de session | log da sessão | журнал сеанса |
 | clipboard | クリップボード | 클립보드 | 剪贴板 | क्लिपबोर्ड | Zwischenablage | portapapeles | presse-papiers | área de transferência | буфер обмена |
 | embedding (the model that turns the library into vectors) | 埋め込み | 임베딩 | 嵌入 | एम्बेडिंग | Embedding | embedding | embedding | embedding | эмбеддинг |
-| sign in (to a ChatGPT account) | サインイン | 로그인 | 登录 | साइन इन | anmelden | iniciar sesión | se connecter | entrar | войти |
-| plan (a ChatGPT plan, Plus or Pro) | プラン | 플랜 | 套餐 | प्लान | Plan | plan | forfait | plano | план |
+| sign in (to a ChatGPT account, or Claude Code to a Claude plan) | サインイン | 로그인 | 登录 | साइन इन | anmelden | iniciar sesión | se connecter | entrar | войти |
+| plan (a ChatGPT plan, Plus or Pro; a Claude plan, Pro, Max or Team) | プラン | 플랜 | 套餐 | प्लान | Plan | plan | forfait | plano | план |
 | subscription (using a ChatGPT plan instead of a key) | サブスクリプション | 구독 | 订阅 | सब्सक्रिप्शन | Abo | suscripción | abonnement | assinatura | подписка |
+| terminal (where the user runs `claude`, the command that stays in English) | ターミナル | 터미널 | 终端 | टर्मिनल | Terminal | terminal (una) | terminal | terminal | терминал |
+| header (an HTTP header a plugin's server reads, such as its key in `x-api-key`) | ヘッダー | 헤더 | 请求头 | हेडर | Header | encabezado | en-tête | cabeçalho | заголовок |
+| package manager (installs and updates SurfSense in place of its own updater) | パッケージマネージャー | 패키지 관리자 | 软件包管理器 | पैकेज मैनेजर | Paketmanager | gestor de paquetes | gestionnaire de paquets | gerenciador de pacotes | менеджер пакетов |
+| OAuth app (a user's own, registered with a provider) | OAuthアプリ | OAuth 앱 | OAuth 应用 | OAuth ऐप | OAuth-App | app OAuth | app OAuth | app OAuth | приложение OAuth |
+| client ID (of an OAuth app) | クライアントID | 클라이언트 ID | 客户端 ID | क्लाइंट आईडी | Client-ID | ID de cliente | ID client | ID do cliente | ID клиента |
+| link (a web address the user adds as a source) | リンク | 링크 | 链接 | लिंक | Link | enlace | lien | link | ссылка |
+| client secret (of an OAuth app) | クライアントシークレット | 클라이언트 시크릿 | 客户端密钥 | क्लाइंट सीक्रेट | Client-Secret | secreto de cliente | secret client | segredo do cliente | секрет клиента |
+| scope (an OAuth permission) | スコープ | 범위 | 权限范围 | स्कोप | Scope | ámbito | portée | escopo | область доступа |
+| callback address (where a provider sends the browser back) | コールバックアドレス | 콜백 주소 | 回调地址 | कॉलबैक पता | Callback-Adresse | dirección de callback | adresse de rappel | endereço de callback | адрес обратного вызова |
 
 ## What the English means
 

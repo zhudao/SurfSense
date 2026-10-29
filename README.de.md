@@ -11,7 +11,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Discord](https://img.shields.io/discord/1359368468260192417?label=Discord)](https://discord.gg/ejRNvftDp9)
 
-  <a href="https://www.surfsense.com/"><img alt="SurfSense, die netzgetrennte Open-Source-Alternative zu NotebookLM" src="surfsense_web/public/homepage/banner.png" /></a>
+  <a href="https://www.surfsense.com/"><img alt="SurfSense, die netzgetrennte Open-Source-Alternative zu NotebookLM" src="www/public/homepage/banner.png" /></a>
 
   <h1>SurfSense</h1>
 
@@ -26,6 +26,7 @@
     <a href="#was-surfsense-mit-jedem-format-macht">Formate</a> ·
     <a href="#schnellstart">Schnellstart</a> ·
     <a href="#surfsense-im-vergleich">Vergleich</a> ·
+    <a href="#plugins">Plugins</a> ·
     <a href="https://www.surfsense.com/pricing">Preise</a> ·
     <a href="https://discord.gg/ejRNvftDp9">Discord</a>
   </p>
@@ -37,18 +38,21 @@
   </p>
 </div>
 
+**Einen Vertrag mit nachverfolgten Änderungen und Kommentaren redigieren**
+
 https://github.com/user-attachments/assets/88326b9d-e763-46db-9635-75f9df9e8682
+
+**Quellen aus dem Web hinzufügen und daraus eine Webseite machen**
+
+https://github.com/user-attachments/assets/073577b7-f055-4f59-8540-330bd764aeb0
 
 SurfSense ist eine kostenlose Open-Source-Desktop-App für Dokumente, die du nicht hochladen kannst. Ein auf Datenschutz ausgelegter KI-Agent im Stil von NotebookLM, der auf deinem Rechner in deinen Dokumenten recherchiert, sie umwandelt und bearbeitet. Der Index bleibt auf deiner Festplatte, du wählst das Modell, lokal oder remote, und es gibt kein Konto.
 
 | Plattform | Download |
 |---|---|
-| **Windows** x64 | [SurfSense-Setup.exe](https://github.com/MODSetter/SurfSense/releases/latest/download/SurfSense-Setup.exe) |
-| **macOS** Apple Silicon | [SurfSense-arm64.dmg](https://github.com/MODSetter/SurfSense/releases/latest/download/SurfSense-arm64.dmg) |
-| **Linux** x64 | [AppImage](https://github.com/MODSetter/SurfSense/releases/latest/download/SurfSense.AppImage) · [deb](https://github.com/MODSetter/SurfSense/releases/latest/download/SurfSense.deb) |
-
-> [!NOTE]
-> **Die gehostete Web-App genutzt?** Exportiere deine Workspaces vor dem 18. Oktober 2026 und importiere sie hier. Siehe [die Abschaltungsseite](https://www.surfsense.com/sunset).
+| **Windows** x64 | [SurfSense-Setup.exe](https://www.surfsense.com/downloads/windows?src=readme) |
+| **macOS** Apple Silicon | [SurfSense-arm64.dmg](https://www.surfsense.com/downloads/mac?src=readme) |
+| **Linux** x64 | [AppImage](https://www.surfsense.com/downloads/linux-appimage?src=readme) · [deb](https://www.surfsense.com/downloads/linux-deb?src=readme) |
 
 ## Schnellstart
 
@@ -68,12 +72,34 @@ SurfSense ist eine kostenlose Open-Source-Desktop-App für Dokumente, die du nic
 | **Bilder** PNG, JPEG, TIFF, BMP, WebP | ✓ Text per OCR erkannt³ | Bilder und Infografiken² | — | In neue Dokumente einfügen |
 | **Markdown**, reiner Text | ✓ | ✓ Markdown | — | — |
 | **HTML** | ✓ | ✓ Webseite | — | — |
+| **Aufnahmen** WAV, MP3, FLAC, Ogg Vorbis | ✓ auf deinem Rechner transkribiert | — | — | — |
 | **Podcast** (Audio) | — | ✓ mit Transkript, standardmäßig auf deinem Rechner vertont | — | — |
 | **Mindmaps, Karteikarten, Quizze** | — | ✓ in der App | — | — |
 
 <sub>¹ Mit Office-Unterstützung (LibreOffice), die du in den Einstellungen einschaltest; LibreOffice ist nie im Installationsprogramm enthalten. ² Braucht ein Bildmodell, lokal oder remote; standardmäßig ist keins ausgewählt. ³ Die OCR erkennt lateinische, chinesische und japanische Schrift.</sub>
 
 Bearbeitungen, Umwandlungen und PDF-Werkzeuge erzeugen immer eine neue Datei; dein Original wird nie verändert. Bei PDF, Word und Excel kann SurfSense heute am meisten, und die Unterstützung der anderen Formate wird laufend besser.
+
+## Plugins
+
+Verbinde sie unter **Einstellungen › Plugins**.
+
+**Von SurfSense.** Diese Plugins lesen öffentliche Seiten ohne deine eigenen Konten und brauchen eine SurfSense-Lizenz: [Lade die App herunter](https://www.surfsense.com/downloads) und gib dort deine E-Mail-Adresse ein, dann bekommst du eine kostenlose Lizenz für 14 Tage.
+
+| Plugin | Was es macht |
+|---|---|
+| **Google Search** | Google durchsuchen und die Ergebnisse, Anzeigen und verwandten Fragen lesen |
+| **Web Crawl** | Eine Webseite lesen oder eine ganze Website crawlen und in sauberen Text umwandeln |
+| **YouTube** | YouTube-Videos, -Kanäle und ihre Kommentare lesen |
+| **TikTok** | TikTok-Videos und ihre Kommentare lesen, Nutzer suchen und sehen, was gerade angesagt ist |
+| **Reddit** | Öffentliche Reddit-Beiträge mit ihren Kommentarverläufen oder eine ganze Community lesen |
+| **Instagram** | Öffentliche Instagram-Profile, -Beiträge und -Reels lesen und Profile suchen |
+| **Google Maps** | Orte auf Google Maps finden und ihre Bewertungen lesen |
+| **Amazon** | Amazon-Produkte und Suchergebnisse lesen |
+| **Walmart** | Walmart-Produkte, Suchergebnisse und Bewertungen lesen |
+| **Indeed** | Stellenanzeigen auf Indeed lesen |
+
+**Drittanbieter.** MCP-Server aus der [Plugin-Registry](backend/plugins/registry), etwa DeepWiki und Notion, oder jeder, den du per URL hinzufügst. Keine Lizenz nötig; sie bleiben aus, bis du sie erlaubst.
 
 ## SurfSense im Vergleich
 
@@ -91,18 +117,6 @@ Bearbeitungen, Umwandlungen und PDF-Werkzeuge erzeugen immer eine neue Datei; de
 - **Mitwirken:** PRs werden gegen `dev` geöffnet; siehe [CONTRIBUTING.md](CONTRIBUTING.md) und [`surfsense_local/`](./surfsense_local) für die Entwicklungsschleife. Wie SurfSense funktioniert, steht in [`docs/`](docs/README.md).
 
 <a href="https://github.com/MODSetter/SurfSense/graphs/contributors"><img src="https://contrib.rocks/image?repo=MODSetter/SurfSense" alt="SurfSense-Mitwirkende" /></a>
-
-## Sterneverlauf
-
-<p align="center">
-  <a href="https://www.star-history.com/#MODSetter/SurfSense&Date">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=MODSetter/SurfSense&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=MODSetter/SurfSense&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=MODSetter/SurfSense&type=Date" />
-    </picture>
-  </a>
-</p>
 
 ## Lizenz
 

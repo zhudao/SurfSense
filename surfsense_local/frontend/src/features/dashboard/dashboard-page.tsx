@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ApprovalDialog } from "@/features/agent/approval-dialog"
-import { toast } from "sonner"
+import { AgentApprovalsProvider } from "@/features/agent/agent-approvals"
 import {
   CircleAlertIcon,
   LayoutGridIcon,
   PlusIcon,
   SidebarRightIcon,
-  UnplugIcon,
+  PlugIcon,
   XIcon,
 } from "@/components/ui/icons"
 
+import { FeatureBadge } from "@/components/feature-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -20,7 +20,10 @@ import {
 import { CitationPanel } from "@/features/chat/citation-panel"
 import { consentPlaceholder } from "@/features/chat/model-issue"
 import { askEgress } from "@/features/egress/ask-egress"
-import { setDestinationEnabled } from "@/features/egress/api"
+import { setDestinationsEnabled } from "@/features/egress/api"
+import { ExtraUsageNotice } from "@/features/chat/extra-usage/extra-usage-notice"
+import { useExtraUsage } from "@/features/chat/extra-usage/extra-usage-store"
+import { useSelectedOnClaudePlan } from "@/features/chat/extra-usage/use-selected-on-claude-plan"
 import { ModelIssueNotice } from "@/features/chat/model-issue-notice"
 import {
   useBlockAgentic,
@@ -45,6 +48,7 @@ import {
 } from "@/features/settings/settings-dialog"
 import { SourcesPanel } from "@/features/sources/sources-panel"
 import { useSources } from "@/features/sources/use-sources"
+import { useWebSources } from "@/features/sources/web/use-web-sources"
 import { getFileViewer } from "@/features/file-viewers/registry"
 import { SourcePreviewPanel } from "@/features/source-preview/source-preview-panel"
 import { ArtifactList } from "@/features/studio/artifact-list"
@@ -56,12 +60,13 @@ import {
 } from "@/features/office-support/office-offer"
 import { StudioPanel } from "@/features/studio/studio-panel"
 import { useStudio } from "@/features/studio/use-studio"
-import { UpdateButton } from "@/features/updates/update-settings"
+import { TitleBarUpdate } from "@/features/updates/title-bar-update"
 import type { Workspace } from "@/features/workspaces/api"
 import { useWorkspaces } from "@/features/workspaces/use-workspaces"
 import { useStableCallback } from "@/hooks/use-stable-callback"
 import { intl } from "@/i18n/intl"
 import { WorkspaceRail } from "@/features/workspaces/workspace-rail"
+import type { PluginsStart } from "@/features/plugins/plugins-settings"
 import {
   readRightPanelOpen,
   readSourcePreview,
@@ -99,16 +104,20 @@ function WorkspaceDashboard({
   onModelIssueSettings,
   onAllowModelIssue,
   onModelRequired,
+  onModelCheck,
   onModelSelected,
   onOpenLicense,
   onOpenAudioSettings,
+  onOpenSpeechSettings,
   onOpenOfficeSupport,
+  onOpenPlugins,
   modelsVisited,
 }: {
   workspace: Workspace
   selection: ModelSelection | null
   providerAvailable: boolean
   modelIssue: ModelIssue | null
+  onModelCheck: () => void
   needsConsent: boolean
   onModelIssueSettings: () => void
   onAllowModelIssue: () => void
@@ -116,7 +125,9 @@ function WorkspaceDashboard({
   onModelSelected: (selection: ModelSelection) => void
   onOpenLicense: () => void
   onOpenAudioSettings: () => void
+  onOpenSpeechSettings: () => void
   onOpenOfficeSupport: () => void
+  onOpenPlugins: (start?: PluginsStart) => void
   modelsVisited: number
 }) {
   const [inspect, setInspect] = useState<Inspect>(null)
@@ -125,6 +136,11 @@ function WorkspaceDashboard({
     readSourcePreview(workspace.id)
   )
   const sources = useSources(workspace.id)
+  const webSources = useWebSources(
+    workspace.id,
+    sources.addCreated,
+    onOpenLicense
+  )
   // Which formats Studio offers is the server's answer to what is selected,
   // so it has to be asked again when that changes. The chat model is named
   // here directly; the image model is chosen inside the settings dialog and
@@ -158,6 +174,7 @@ function WorkspaceDashboard({
     newChatMode: useNewChatChoice(selection),
     onAgenticGate,
     onModelRequired,
+    onModelCheck,
   })
   const sourcePreview = sources.documents.find(
     (document) => document.id === sourcePreviewId
@@ -179,6 +196,9 @@ function WorkspaceDashboard({
 
   const composerHold =
     modelIssue && needsConsent ? consentPlaceholder(modelIssue) : undefined
+  // A model issue blocks sending, so it takes the composer's one notice first.
+  const extraUsage = useExtraUsage()
+  const onClaudePlan = useSelectedOnClaudePlan(selection)
 
   const closeInspect = () => setInspect(null)
   const startNewChat = () => {
@@ -192,6 +212,7 @@ function WorkspaceDashboard({
   // Stable, like everything else the memoized sources panel takes: this page
   // re-renders when a run starts, ends or changes state, and for a title, a
   // thread switch, Settings and the other columns.
+  const openSpeechSettings = useStableCallback(() => onOpenSpeechSettings())
   const toggleSourcePreview = useStableCallback((documentId: number) => {
     const next = sourcePreviewId === documentId ? null : documentId
     setSourcePreviewId(next)
@@ -249,6 +270,9 @@ function WorkspaceDashboard({
           onRename={sources.rename}
           folderActions={sources.folderActions}
           notes={sourceNotes}
+          web={webSources}
+          transcriptionPaces={sources.transcriptionPaces}
+          onOpenSpeechSettings={openSpeechSettings}
         />
       </aside>
     ),
@@ -276,6 +300,9 @@ function WorkspaceDashboard({
       sources.rename,
       sources.folderActions,
       sourceNotes,
+      webSources,
+      sources.transcriptionPaces,
+      openSpeechSettings,
     ]
   )
   const sidebarFooter = useMemo(
@@ -290,29 +317,12 @@ function WorkspaceDashboard({
           id: "dashboard_sidebar_plugins_button",
           defaultMessage: "Plugins",
         }),
-        icon: UnplugIcon,
-        badge: intl.formatMessage({
-          id: "dashboard_sidebar_plugins_soon_label",
-          defaultMessage: "Coming soon",
-        }),
-        // TODO: open the plugins panel once it exists.
-        onClick: () =>
-          toast.info(
-            intl.formatMessage({
-              id: "dashboard_plugins_soon_toast",
-              defaultMessage: "Plugins are coming soon",
-            }),
-            {
-              description: intl.formatMessage({
-                id: "dashboard_plugins_soon_body",
-                defaultMessage:
-                  "Connect external tools to extend what SurfSense can do. We’re still polishing this.",
-              }),
-            }
-          ),
+        icon: PlugIcon,
+        badge: <FeatureBadge stage="new" />,
+        onClick: () => onOpenPlugins(),
       },
     ],
-    []
+    [onOpenPlugins]
   )
   // The sidebar's callbacks keep one identity and call the latest chat.
   const sidebarNewChat = useStableCallback(() => startNewChat())
@@ -375,7 +385,7 @@ function WorkspaceDashboard({
       <OpenArtifactContext.Provider value={openArtifact}>
         <div className="titlebar-controls">
           <div className="titlebar-controls-end">
-            <UpdateButton />
+            <TitleBarUpdate />
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -470,46 +480,53 @@ function WorkspaceDashboard({
             controls={LEFT_COLUMN_ID}
           />
           <div className="flex min-h-0 min-w-[520px] flex-1 flex-col">
-            <ApprovalDialog
-              request={chat.approvals[0] ?? null}
-              othersWaiting={Math.max(0, chat.approvals.length - 1)}
-              onAnswer={chat.answerApproval}
-            />
-            <ThreadPanel
-              live={chat.liveThread}
-              thread={chat.activeThread}
-              view={chat.conversationView}
-              model={selection}
-              isLoading={chat.isLoadingMessages}
-              isRunning={chat.isRunning}
-              animateTitle={chat.activeThreadId === chat.animatingTitleThreadId}
-              providerAvailable={providerAvailable}
-              notice={
-                modelIssue ? (
-                  <ModelIssueNotice
-                    issue={modelIssue}
-                    onAllow={needsConsent ? onAllowModelIssue : undefined}
-                    onOpenSettings={onModelIssueSettings}
-                  />
-                ) : null
-              }
-              blockedPlaceholder={composerHold}
-              onCitation={onCitation}
-              onModelSetup={onModelRequired}
-              onModelSelected={onModelSelected}
-              onRetry={chat.retry}
-              onNewChat={startNewChat}
-              sourceCount={sources.includedDocumentIds.length}
-              onUploadSources={(files) => void sources.upload(files)}
-              isUploadingSources={sources.isUploading}
-              onTitleAnimationComplete={chat.finishTitleAnimation}
-              autoNamingThreadId={chat.autoNamingThreadId}
-              onRename={chat.rename}
-              onDelete={async (threadId) => {
-                if (threadId === chat.activeThreadId) closeInspect()
-                await chat.removeThread(threadId)
-              }}
-            />
+            <AgentApprovalsProvider
+              approvals={chat.approvals}
+              answer={chat.answerApproval}
+            >
+              <ThreadPanel
+                live={chat.liveThread}
+                thread={chat.activeThread}
+                view={chat.conversationView}
+                model={selection}
+                isLoading={chat.isLoadingMessages}
+                isRunning={chat.isRunning}
+                animateTitle={
+                  chat.activeThreadId === chat.animatingTitleThreadId
+                }
+                providerAvailable={providerAvailable}
+                notice={
+                  modelIssue ? (
+                    <ModelIssueNotice
+                      issue={modelIssue}
+                      onAllow={needsConsent ? onAllowModelIssue : undefined}
+                      onOpenSettings={onModelIssueSettings}
+                    />
+                  ) : extraUsage && onClaudePlan ? (
+                    <ExtraUsageNotice usage={extraUsage} />
+                  ) : null
+                }
+                blockedPlaceholder={composerHold}
+                onCitation={onCitation}
+                onModelSetup={onModelRequired}
+                onModelSelected={onModelSelected}
+                onRetry={chat.retry}
+                onNewChat={startNewChat}
+                sourceCount={sources.includedDocumentIds.length}
+                onUploadSources={(files) => void sources.upload(files)}
+                isUploadingSources={sources.isUploading}
+                onOpenPlugins={onOpenPlugins}
+                dictation={chat.dictation}
+                onOpenSpeechSettings={openSpeechSettings}
+                onTitleAnimationComplete={chat.finishTitleAnimation}
+                autoNamingThreadId={chat.autoNamingThreadId}
+                onRename={chat.rename}
+                onDelete={async (threadId) => {
+                  if (threadId === chat.activeThreadId) closeInspect()
+                  await chat.removeThread(threadId)
+                }}
+              />
+            </AgentApprovalsProvider>
           </div>
           {/* Collapsed, the rail has no edge to drag. */}
           {rightPanelOpen ? (
@@ -677,6 +694,8 @@ export function DashboardPage({
     useState<SettingsSectionId>("general")
   // Bumped after egress is allowed from the notice, to check the model again.
   const [consents, setConsents] = useState(0)
+  // Bumped when a send is refused for a reason the check reports, so it says why.
+  const [refusedSends, setRefusedSends] = useState(0)
 
   // Set while Settings opens on Office support's consent, from a thread's offer.
   const [askOfficeConsent, setAskOfficeConsent] = useState(false)
@@ -690,6 +709,13 @@ export function DashboardPage({
     setSettingsSection("office-support")
     setSettingsOpen(true)
   }, [])
+  // Set while Settings opens on Plugins' Browse or Add custom plugin, from the composer.
+  const [pluginsStart, setPluginsStart] = useState<PluginsStart>()
+  const openPlugins = useCallback((start?: PluginsStart) => {
+    setPluginsStart(start)
+    setSettingsSection("plugins")
+    setSettingsOpen(true)
+  }, [])
   // The menu has Settings to go to here, once a workspace renders it;
   // otherwise it opens the dialog.
   useHelpMenuReport(
@@ -698,7 +724,8 @@ export function DashboardPage({
   )
 
   // Checked when the model changes, when settings close (a key entered again,
-  // egress switched, a connection edited) and after egress is allowed.
+  // egress switched, a connection edited), after egress is allowed, and after a
+  // send was refused for Claude Code.
   useEffect(() => {
     if (!selection) return
     if (skipFirstCheck.current) {
@@ -713,7 +740,7 @@ export function DashboardPage({
       }
     )
     return () => controller.abort()
-  }, [selection, modelsVisited, consents])
+  }, [selection, modelsVisited, consents, refusedSends])
 
   const availability: Availability =
     selection && checked.key === modelKey(selection)
@@ -735,7 +762,7 @@ export function DashboardPage({
     void askEgress({
       destination,
       host: issue.host ?? "",
-      allow: () => setDestinationEnabled(destination, true),
+      allow: () => setDestinationsEnabled([destination], true),
     }).then((allowed) => {
       if (allowed) setConsents((count) => count + 1)
     })
@@ -786,26 +813,32 @@ export function DashboardPage({
             )
           }
           onModelRequired={() => openSettings("chat-models")}
+          onModelCheck={() => setRefusedSends((count) => count + 1)}
           onModelSelected={onModelSelected}
           onOpenLicense={() => openSettings("license")}
           onOpenAudioSettings={() => openSettings("audio-models")}
+          onOpenSpeechSettings={() => openSettings("speech-models")}
           onOpenOfficeSupport={openOfficeSupport}
+          onOpenPlugins={openPlugins}
           modelsVisited={modelsVisited}
         />
         <SettingsDialog
           open={settingsOpen}
           section={settingsSection}
           askOfficeConsent={askOfficeConsent}
+          pluginsStart={pluginsStart}
           onOpenChange={(open) => {
             setSettingsOpen(open)
             if (!open) {
               setModelsVisited((seen) => seen + 1)
               setAskOfficeConsent(false)
+              setPluginsStart(undefined)
             }
           }}
           onSectionChange={(next) => {
             setSettingsSection(next)
             setAskOfficeConsent(false)
+            setPluginsStart(undefined)
           }}
           onModelUnavailable={onModelUnavailable}
           onModelSelected={onModelSelected}

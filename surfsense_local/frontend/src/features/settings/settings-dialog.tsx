@@ -1,4 +1,4 @@
-import type { ComponentType, MouseEvent } from "react"
+import type { ComponentType } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -18,6 +18,8 @@ import {
   Image01Icon,
   InformationCircleIcon,
   LicenseIcon,
+  Mic01Icon,
+  PlugIcon,
   Settings2Icon,
   EmbeddingIcon,
   File02Icon,
@@ -31,6 +33,10 @@ import {
 import { AboutSettings } from "@/features/about/about-settings"
 import { NetworkSettings } from "@/features/egress/network-settings"
 import { OfficeSupportSettings } from "@/features/office-support/office-support-settings"
+import {
+  PluginsSettings,
+  type PluginsStart,
+} from "@/features/plugins/plugins-settings"
 import { LicenseSettings } from "@/features/license/license-settings"
 import type { ImportAccepted } from "@/features/migration/api"
 import { ImportBundleButton } from "@/features/migration/import-bundle"
@@ -47,6 +53,7 @@ import { AudioModelsSettings } from "./models/audio-models-settings"
 import { ChatModelsSettings } from "./models/chat-models-settings"
 import { ImageEditModelsSettings } from "./models/image-edit-models-settings"
 import { ImageModelsSettings } from "./models/image-models-settings"
+import { SpeechModelsSettings } from "./models/speech-models-settings"
 import { VideoModelsSettings } from "./models/video-models-settings"
 import { SettingsSection } from "./settings-section"
 
@@ -62,22 +69,16 @@ export type SettingsSectionId =
   | "image-models"
   | "image-edit-models"
   | "audio-models"
+  | "speech-models"
   | "video-models"
   | "embedding-model"
   | "resources"
   | "office-support"
   | "network"
+  | "plugins"
   | "license"
   | "about"
   | "report-issue"
-
-const CLOUD_EXPORT_URL = "https://surfsense.com/sunset"
-
-function openCloudExport(event: MouseEvent<HTMLAnchorElement>) {
-  if (!window.surfsense?.openExternal) return
-  event.preventDefault()
-  void window.surfsense.openExternal(CLOUD_EXPORT_URL)
-}
 
 function GeneralSettings({
   onImported,
@@ -146,9 +147,10 @@ function GeneralSettings({
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <button
+                  <Button
                     type="button"
-                    className="relative inline-flex size-5 items-center justify-center rounded-sm text-muted-foreground transition-colors duration-150 before:absolute before:inset-[-10px] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                    variant="bare"
+                    className="relative inline-flex size-5 items-center justify-center rounded-sm text-muted-foreground before:absolute before:-inset-2.5 hover:text-foreground focus-visible:ring-2"
                     aria-label={intl.formatMessage({
                       id: "settings_general_cloud_import_info_aria",
                       defaultMessage:
@@ -159,7 +161,7 @@ function GeneralSettings({
                       className="size-3.5"
                       strokeWidth={1.5}
                     />
-                  </button>
+                  </Button>
                 }
               />
               <TooltipContent
@@ -182,18 +184,6 @@ function GeneralSettings({
                 "Upload the ZIP you exported from SurfSense cloud.",
             })}
           </p>
-          <a
-            href={CLOUD_EXPORT_URL}
-            target="_blank"
-            rel="noreferrer"
-            onClick={openCloudExport}
-            className="w-fit text-sm text-muted-foreground underline underline-offset-3 hover:text-foreground"
-          >
-            {intl.formatMessage({
-              id: "settings_general_cloud_import_link",
-              defaultMessage: "Open SurfSense cloud",
-            })}
-          </a>
         </div>
         <ImportBundleButton onImported={onImported} />
       </div>
@@ -205,10 +195,12 @@ function GeneralSettings({
 const SETTINGS_SECTIONS = [
   { id: "general", group: "settings", icon: Settings2Icon },
   { id: "license", group: "settings", icon: LicenseIcon },
+  { id: "plugins", group: "settings", icon: PlugIcon },
   { id: "chat-models", group: "models", icon: Chat01Icon },
   { id: "image-models", group: "models", icon: Image01Icon },
   { id: "image-edit-models", group: "models", icon: AiImageEditIcon },
   { id: "audio-models", group: "models", icon: AudioWaveformIcon },
+  { id: "speech-models", group: "models", icon: Mic01Icon },
   { id: "video-models", group: "models", icon: Video01Icon },
   { id: "embedding-model", group: "models", icon: EmbeddingIcon },
   { id: "resources", group: "system", icon: CpuIcon },
@@ -272,6 +264,11 @@ const SECTION_LABELS: Record<SettingsSectionId, () => string> = {
       id: "settings_nav_audio_label",
       defaultMessage: "Audio",
     }),
+  "speech-models": () =>
+    intl.formatMessage({
+      id: "settings_nav_speech_label",
+      defaultMessage: "Speech recognition",
+    }),
   "embedding-model": () =>
     intl.formatMessage({
       id: "settings_nav_embedding_label",
@@ -291,6 +288,11 @@ const SECTION_LABELS: Record<SettingsSectionId, () => string> = {
     intl.formatMessage({
       id: "settings_nav_network_label",
       defaultMessage: "Network",
+    }),
+  plugins: () =>
+    intl.formatMessage({
+      id: "settings_nav_plugins_label",
+      defaultMessage: "Plugins",
     }),
   license: () =>
     intl.formatMessage({
@@ -313,6 +315,7 @@ export function SettingsDialog({
   open,
   section,
   askOfficeConsent = false,
+  pluginsStart,
   onOpenChange,
   onSectionChange,
   onModelUnavailable = () => undefined,
@@ -323,6 +326,8 @@ export function SettingsDialog({
   section: SettingsSectionId
   /** Opens Office support's download consent with the section. */
   askOfficeConsent?: boolean
+  /** Opens Plugins on Browse or on Add custom plugin. */
+  pluginsStart?: PluginsStart
   onOpenChange: (open: boolean) => void
   onSectionChange: (section: SettingsSectionId) => void
   onModelUnavailable?: () => void
@@ -335,7 +340,7 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[640px] min-h-0 w-[1000px] max-w-none gap-0 overflow-hidden rounded-2xl p-0 shadow-xl select-none sm:max-w-none">
+      <DialogContent className="h-192 max-h-[calc(100vh-2rem)] min-h-0 w-5xl gap-0 overflow-hidden rounded-2xl p-0 shadow-xl select-none sm:max-w-[calc(100%-2rem)]">
         <DialogHeader className="sr-only">
           <DialogTitle>
             {intl.formatMessage({
@@ -351,8 +356,8 @@ export function SettingsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid h-full min-h-0 grid-cols-[184px_minmax(0,1fr)]">
-          <aside className="min-h-0 overflow-y-auto overscroll-contain border-r bg-sidebar p-3 text-sidebar-foreground">
+        <div className="grid h-full min-h-0 grid-cols-[auto_minmax(0,1fr)]">
+          <aside className="min-h-0 w-50 overflow-y-auto overscroll-contain border-r bg-sidebar p-3 text-sidebar-foreground">
             {(Object.keys(GROUP_LABELS) as SettingsNavItem["group"][]).map(
               (group, index) => (
                 <div key={group} className={cn(index > 0 && "mt-3")}>
@@ -376,6 +381,7 @@ export function SettingsDialog({
                       const selected = section.id === activeSection.id
                       return (
                         <Button
+                          static
                           key={section.id}
                           type="button"
                           variant="ghost"
@@ -422,6 +428,9 @@ export function SettingsDialog({
             {activeSection.id === "audio-models" ? (
               <AudioModelsSettings onModelUnavailable={onModelUnavailable} />
             ) : null}
+            {activeSection.id === "speech-models" ? (
+              <SpeechModelsSettings />
+            ) : null}
             {activeSection.id === "embedding-model" ? (
               <EmbeddingSettings />
             ) : null}
@@ -430,6 +439,12 @@ export function SettingsDialog({
               <OfficeSupportSettings askConsent={askOfficeConsent} />
             ) : null}
             {activeSection.id === "network" ? <NetworkSettings /> : null}
+            {activeSection.id === "plugins" ? (
+              <PluginsSettings
+                start={pluginsStart}
+                onOpenLicense={() => onSectionChange("license")}
+              />
+            ) : null}
             {activeSection.id === "license" ? <LicenseSettings /> : null}
             {activeSection.id === "about" ? <AboutSettings /> : null}
             {activeSection.id === "report-issue" ? (

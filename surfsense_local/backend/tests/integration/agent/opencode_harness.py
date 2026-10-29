@@ -11,6 +11,7 @@ import socket
 import subprocess
 import threading
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
@@ -29,9 +30,6 @@ MODEL = "stub-model"
 # What Electron's launch passes on from the system (sidecars/opencode.ts); on
 # Windows the Bun binary dies at start (0xC0000409) without SYSTEMROOT.
 FROM_THE_SYSTEM = (
-    "TMPDIR",
-    "TEMP",
-    "TMP",
     "LANG",
     "LC_ALL",
     "LC_CTYPE",
@@ -283,16 +281,17 @@ class RunningOpencode:
         self.process.wait(timeout=10)
 
 
-def start_opencode(agent_dir: Path, port: int, password: str) -> RunningOpencode:
-    """Start the staged opencode on the configuration in `agent_dir`, as Electron would."""
+def start_opencode(
+    agent_dir: Path,
+    port: int,
+    password: str,
+    extra_env: Mapping[str, str] | None = None,
+) -> RunningOpencode:
+    """Start the staged opencode on the configuration in `agent_dir`, as Electron would.
+
+    `extra_env` replaces any of it, such as the proxy a test points it at.
+    """
     home = agent_dir / "opencode"
-    config_folder = home / "config" / "opencode"
-    (config_folder / "node_modules").mkdir(parents=True, exist_ok=True)
-    lock = {
-        "lockfileVersion": 3,
-        "packages": {"": {"dependencies": {"@opencode-ai/plugin": "*"}}},
-    }
-    (config_folder / "package-lock.json").write_text(json.dumps(lock))
     nowhere = "http://127.0.0.1:9"
     env = {
         **{name: os.environ[name] for name in FROM_THE_SYSTEM if name in os.environ},
@@ -304,10 +303,11 @@ def start_opencode(agent_dir: Path, port: int, password: str) -> RunningOpencode
         "XDG_DATA_HOME": str(home / "data"),
         "XDG_CACHE_HOME": str(home / "cache"),
         "XDG_STATE_HOME": str(home / "state"),
+        "TMPDIR": str(home / "temp"),
+        "TEMP": str(home / "temp"),
+        "TMP": str(home / "temp"),
         "OPENCODE_CONFIG": str(agent_dir / "opencode.json"),
-        "OPENCODE_SERVER_PASSWORD": password,
-        "npm_config_audit": "false",
-        "npm_config_fetch_retries": "0",
+        "OPENCODE_PASSWORD": password,
         "HTTP_PROXY": nowhere,
         "HTTPS_PROXY": nowhere,
         "ALL_PROXY": nowhere,
@@ -315,19 +315,14 @@ def start_opencode(agent_dir: Path, port: int, password: str) -> RunningOpencode
         **dict.fromkeys(
             (
                 "OPENCODE_DISABLE_MODELS_FETCH",
-                "OPENCODE_DISABLE_SHARE",
-                "OPENCODE_DISABLE_LSP_DOWNLOAD",
-                "OPENCODE_DISABLE_AUTOUPDATE",
-                "OPENCODE_DISABLE_DEFAULT_PLUGINS",
-                "OPENCODE_PURE",
-                "OPENCODE_DISABLE_PROJECT_CONFIG",
-                "OPENCODE_DISABLE_EXTERNAL_SKILLS",
                 "OPENCODE_DISABLE_CLAUDE_CODE",
+                "OPENCODE_CONFIG_PROJECT_DISABLE",
             ),
             "1",
         ),
     }
-    for folder in ("data", "cache", "state"):
+    env.update(extra_env or {})
+    for folder in ("config", "data", "cache", "state", "temp"):
         (home / folder).mkdir(parents=True, exist_ok=True)
     process = subprocess.Popen(
         [str(STAGED), "serve", "--hostname", "127.0.0.1", "--port", str(port)],
@@ -341,9 +336,10 @@ def start_opencode(agent_dir: Path, port: int, password: str) -> RunningOpencode
 
 
 def wait_until_healthy(running: RunningOpencode, timeout: float = 60.0) -> None:
-    """Block until opencode answers its health route, or fail the test.
+    """Block until opencode says it is ready, or fail the test.
 
-    The port opens before the server answers on it, so only an answer counts.
+    The port opens before the server answers on it, and /api/info answers 503
+    while it boots, so only a 200 counts.
     """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -351,7 +347,7 @@ def wait_until_healthy(running: RunningOpencode, timeout: float = 60.0) -> None:
             raise RuntimeError(f"opencode exited with {running.process.returncode}")
         try:
             reply = httpx.get(
-                f"{running.url}/global/health",
+                f"{running.url}/api/info",
                 auth=("opencode", running.password),
                 timeout=1.0,
             )
@@ -360,7 +356,7 @@ def wait_until_healthy(running: RunningOpencode, timeout: float = 60.0) -> None:
         except httpx.HTTPError:
             pass
         time.sleep(0.2)
-    raise RuntimeError("opencode never answered its health route")
+    raise RuntimeError("opencode never said it was ready")
 
 
 class StandInForElectron:
@@ -369,9 +365,16 @@ class StandInForElectron:
     A rewrite is the API's to apply, through opencode's own reload.
     """
 
-    def __init__(self, agent_dir: Path, port: int, password: str) -> None:
+    def __init__(
+        self,
+        agent_dir: Path,
+        port: int,
+        password: str,
+        extra_env: Mapping[str, str] | None = None,
+    ) -> None:
         self._config = agent_dir / "opencode.json"
         self._agent_dir, self._port, self._password = agent_dir, port, password
+        self._extra_env = extra_env
         self._stopping = threading.Event()
         self._thread = threading.Thread(target=self._watch, daemon=True)
         self.running: RunningOpencode | None = None
@@ -396,5 +399,7 @@ class StandInForElectron:
     def _follow(self) -> None:
         """Start opencode the first time the file is there."""
         if self.running is None and self._config.is_file():
-            self.running = start_opencode(self._agent_dir, self._port, self._password)
+            self.running = start_opencode(
+                self._agent_dir, self._port, self._password, self._extra_env
+            )
             self.starts += 1

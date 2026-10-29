@@ -65,6 +65,7 @@ def import_models() -> None:
     A relationship names its target as a string, so an unimported model is a
     name that cannot resolve.
     """
+    import modules.agent.engines.claude_code.models
     import modules.artifacts.models
     import modules.chat.models
     import modules.chunks.models
@@ -74,7 +75,8 @@ def import_models() -> None:
     import modules.folders.models
     import modules.license.models
     import modules.llm.models
-    import modules.plugins.models
+    import modules.plugins.bundles.models
+    import modules.plugins.installed.models
     import modules.source_roots.models
     import modules.workspaces.models
 

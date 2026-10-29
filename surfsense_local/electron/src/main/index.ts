@@ -1,5 +1,4 @@
-import { randomBytes } from "node:crypto"
-import { existsSync, mkdirSync, rmSync, statSync } from "node:fs"
+import { mkdirSync } from "node:fs"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 
@@ -11,84 +10,59 @@ import {
   nativeTheme,
   safeStorage,
   shell,
+  systemPreferences,
 } from "electron"
-// Static on purpose: electron-updater is CJS and exposes `autoUpdater` through
-// a getter, which `await import()` cannot see (named export comes back
-// undefined). require() honours it, and the getter is lazy so dev pays nothing.
-import { autoUpdater } from "electron-updater"
 
 import {
   applyDevAppIdentity,
   devWindowIcon,
   nameDevBuild,
 } from "./dev-app-identity.ts"
+import { dataDirs } from "./data-dir.ts"
 import { managedOriginalPath } from "./document-files.ts"
 import { printInHiddenWindow } from "./docx-snapshot/print-in-hidden-window.ts"
 import { serveDocxSnapshots } from "./docx-snapshot/serve-snapshots.ts"
-import { allowedExternalUrl } from "./external-url.ts"
-import { getFreePort, waitForHealth } from "./net.ts"
+import { allowedExternalUrl, confirmedExternalUrl } from "./external-url.ts"
+import { frameMayNavigate } from "./framed-navigation.ts"
+import { pluginPageUrl, type PluginPage } from "./plugin-page-url.ts"
 import { loadSecret } from "./secret.ts"
-import {
-  llamacppSpec,
-  LLAMACPP_SIDECAR,
-  PRESET_FILE,
-} from "./sidecars/llamacpp.ts"
-import {
-  audiocppSpec,
-  AUDIOCPP_SIDECAR,
-  SERVER_CONFIG,
-} from "./sidecars/audiocpp.ts"
-import {
-  binaryPath as opencodeBinaryPath,
-  configPath as opencodeConfigPath,
-  opencodeSpec,
-  OPENCODE_SIDECAR,
-} from "./sidecars/opencode.ts"
-import { prepareOpencodeHome } from "./sidecars/opencode-home.ts"
-import { recordOpencode, stopLeftoverOpencode } from "./sidecars/opencode-leftovers.ts"
-import { apiSpec, workerSpec } from "./sidecars/python.ts"
-import {
-  binaryPath as sdcppBinaryPath,
-  sdcppSpec,
-  SDCPP_SIDECAR,
-  type ImageRuntime,
-} from "./sidecars/sdcpp.ts"
-import {
-  startAll,
-  startOne,
-  stopAll,
-  stopNamed,
-  type Sidecars,
-} from "./sidecars/supervisor.ts"
-import type { SidecarContext, SidecarSpec } from "./sidecars/types.ts"
+import { bootSidecars, type BootContext } from "../../../sidecars/boot.ts"
+import { stopOnce } from "../../../sidecars/stop-once.ts"
+import { stopAll, type Sidecars } from "../../../sidecars/supervisor.ts"
+import type { SidecarContext } from "../../../sidecars/types.ts"
 import { refuseSpellcheckDownloads } from "./spellcheck.ts"
-import {
-  attachUpdater,
-  readUpdatePrefs,
-  writeUpdatePrefs,
-  type Updates,
-  type UpdateState,
-} from "./updater.ts"
 import {
   loadThemePreference,
   saveThemePreference,
   type ThemePreference,
 } from "./theme-prefs.ts"
 import { loadWindowState, saveWindowState } from "./window-state.ts"
-import { announceApiUrl, withdrawApiUrl } from "./api-url/announce-api-url.ts"
+import { announceApiUrl, withdrawApiUrl } from "../../../sidecars/api-url/announce-api-url.ts"
 import { applyLocalePreference } from "./i18n/app-locale.ts"
 import { loadLocalePreference } from "./i18n/locale-prefs.ts"
 import { registerLocaleHandlers } from "./i18n/locale-ipc.ts"
 import { registerAboutHandlers } from "./about/about-ipc.ts"
-import { sessionLog } from "./session-log/session-log.ts"
-import { warnMain } from "./session-log/main-warn.ts"
+import { registerDataFolderHandlers } from "./about/data-folder-ipc.ts"
+import { sessionLog } from "../../../sidecars/session-log/session-log.ts"
+import { warnMain } from "../../../sidecars/session-log/main-warn.ts"
 import { registerSessionLogHandlers } from "./session-log/session-log-ipc.ts"
 import { appMenu } from "./menu/app-menu.ts"
 import { helpMenu } from "./menu/help-menu.ts"
 import { apiQuitConfirmation } from "./quit/api-quit-confirmation.ts"
 import { confirmQuit } from "./quit/confirm-running-replies.ts"
+import { installPermissionHandlers } from "./permissions/handlers.ts"
+import { registerMicrophoneHandlers } from "./microphone/ipc.ts"
+import { startPrivacyChoices } from "./privacy-choices/start-privacy-choices.ts"
 
 const DEV_RENDERER_URL = "http://localhost:5173"
+// The main window's page when packaged: the built SPA, loaded from disk.
+const PACKAGED_PAGE = join(
+  app.getAppPath(),
+  "..",
+  "frontend",
+  "dist",
+  "index.html"
+)
 
 function openAllowedExternal(url: string): void {
   const allowed = allowedExternalUrl(url)
@@ -97,11 +71,22 @@ function openAllowedExternal(url: string): void {
 
 nameDevBuild()
 
-// Dev keeps its own dir so testing never leaks into the real install's ~/.surfsense.
-const DATA_DIR = join(
-  app.getPath("home"),
-  app.isPackaged ? ".surfsense" : ".surfsense-dev"
-)
+const DIRS = dataDirs({
+  packaged: app.isPackaged,
+  env: process.env,
+  home: app.getPath("home"),
+  execPath: process.execPath,
+})
+const DATA_DIR = DIRS.data
+// Set before anything asks for a temp path; the sidecars inherit it.
+if (DIRS.temp) {
+  try {
+    mkdirSync(DIRS.temp, { recursive: true })
+    process.env.TMPDIR = DIRS.temp
+  } catch (error) {
+    warnMain(sessionLog, `failed to create ${DIRS.temp}, keeping TMPDIR: ${String(error)}`)
+  }
+}
 // productName is "SurfSense", same as the legacy desktop app, so the default
 // userData would be shared with it. Users run both during migration.
 app.setPath("userData", join(DATA_DIR, "electron"))
@@ -115,6 +100,10 @@ let confirmingQuit = false
 let mainWindow: BrowserWindow | null = null
 let shuttingDown = false
 let stopDocxSnapshots: (() => void) | null = null
+// Boot's watchers; they must stop before the sidecars they would otherwise restart.
+let stopSidecarWatchers: (() => void) | null = null
+// The daily update check and the usage report timers.
+let stopPrivacyChoices: (() => void) | null = null
 
 function onSidecarCrash(name: string, code: number | null): void {
   warnMain(sessionLog, `sidecar ${name} crashed (code=${code})`)
@@ -123,143 +112,6 @@ function onSidecarCrash(name: string, code: number | null): void {
     name,
     code,
   })
-}
-
-// sd-server takes its model as a startup argument and dies without one, so it
-// cannot be started at boot like the others: the model arrives later, on a
-// download, and changes again whenever a different one is chosen. The API is the
-// authority on which weights that is, so follow it and restart on a change.
-// ponytail: a poll, not a push. It costs one local request every few seconds and
-// needs no IPC channel of its own; a change is user-initiated and rare, so the
-// few seconds of lag are not felt.
-function watchImageModel(ctx: SidecarContext): void {
-  if (ctx.imageModelsDir == null) return
-  const endpoint = `http://${ctx.host}:${ctx.apiPort}/llm/image/local/runtime`
-  let current: string | null = null
-
-  const reconcile = async () => {
-    if (!sidecars || shuttingDown) return
-    const response = await fetch(endpoint)
-    if (!response.ok) return
-    const runtime = (await response.json()) as ImageRuntime
-
-    const spec = sdcppSpec(ctx, runtime)
-    const wanted = spec ? spec.args.join("\u0000") : null
-    if (wanted === current) return
-
-    if (sidecars.has(SDCPP_SIDECAR)) await stopNamed(sidecars, SDCPP_SIDECAR)
-    current = wanted
-    if (spec) startOne(sidecars, spec, onSidecarCrash)
-  }
-
-  const timer = setInterval(() => {
-    void reconcile().catch(() => {
-      // The API is down or restarting; the next tick tries again.
-    })
-  }, 5000)
-  timer.unref()
-}
-
-// llama-server reads its per-model arguments from a preset INI **once, at
-// startup**: appending a section while it runs does not surface the model,
-// measured. The API rewrites that file whenever it installs a model or reprices
-// one, so the router has to be restarted to see it. Same shape as
-// watchImageModel, and for the same reason: the API is the authority, and a
-// change is user-initiated and rare.
-function watchGenerationPreset(ctx: SidecarContext): void {
-  if (ctx.llamacppModelsDir == null) return
-  const preset = join(ctx.llamacppModelsDir, PRESET_FILE)
-  let current = presetStamp(preset)
-
-  const reconcile = async () => {
-    if (!sidecars || shuttingDown) return
-    const stamp = presetStamp(preset)
-    if (stamp === current) return
-    current = stamp
-
-    if (sidecars.has(LLAMACPP_SIDECAR)) await stopNamed(sidecars, LLAMACPP_SIDECAR)
-    const spec = llamacppSpec(ctx)
-    if (spec) startOne(sidecars, spec, onSidecarCrash)
-  }
-
-  const timer = setInterval(() => {
-    void reconcile().catch(() => {
-      // Mid-write or mid-restart; the next tick tries again.
-    })
-  }, 5000)
-  timer.unref()
-}
-
-// audio.cpp's server refuses an empty model list, so it runs only while the API's
-// config names a model. The API rewrites that file on every audio install and
-// delete, and removes it with the last model; follow it, as for the preset.
-function watchAudioModels(ctx: SidecarContext): void {
-  if (ctx.audioModelsDir == null) return
-  const config = join(ctx.audioModelsDir, SERVER_CONFIG)
-  let current = presetStamp(config)
-
-  const reconcile = async () => {
-    if (!sidecars || shuttingDown) return
-    const stamp = presetStamp(config)
-    if (stamp === current) return
-    current = stamp
-
-    if (sidecars.has(AUDIOCPP_SIDECAR)) await stopNamed(sidecars, AUDIOCPP_SIDECAR)
-    const spec = audiocppSpec(ctx)
-    if (spec) startOne(sidecars, spec, onSidecarCrash)
-  }
-
-  const timer = setInterval(() => {
-    void reconcile().catch(() => {
-      // Mid-write or mid-restart; the next tick tries again.
-    })
-  }, 5000)
-  timer.unref()
-}
-
-// opencode starts the first time a thread needs the agent, which the API says
-// by writing its configuration. A rewrite is not a restart: opencode reads the
-// file per folder, and the API makes it read it again (`POST /global/dispose`),
-// so no turn is cut off by a restart it did not ask for. Removing the file stops
-// opencode; a crash restarts it, at most once per AGENT_RESTART_MS.
-const AGENT_RESTART_MS = 10_000
-
-function watchAgentConfig(ctx: SidecarContext): void {
-  if (ctx.agentDir == null || ctx.opencodeBinariesDir == null) return
-  const agentDir = ctx.agentDir
-  const config = opencodeConfigPath(agentDir)
-  let lastStart = 0
-
-  const reconcile = async () => {
-    if (!sidecars || shuttingDown) return
-    const child = sidecars.get(OPENCODE_SIDECAR)
-    const running = child != null && child.exitCode === null && child.signalCode === null
-    const wanted = existsSync(config)
-    if (wanted === running) return
-
-    if (!wanted) {
-      await stopNamed(sidecars, OPENCODE_SIDECAR)
-      return
-    }
-    if (Date.now() - lastStart < AGENT_RESTART_MS) return
-    const spec = opencodeSpec(ctx)
-    if (!spec) return
-    prepareOpencodeHome(agentDir)
-    startOne(sidecars, spec, onSidecarCrash)
-    lastStart = Date.now()
-    const pid = sidecars.get(OPENCODE_SIDECAR)?.pid
-    if (pid != null && ctx.opencodePort != null && ctx.opencodePassword != null) {
-      recordOpencode(agentDir, { pid, port: ctx.opencodePort, password: ctx.opencodePassword })
-    }
-  }
-
-  const timer = setInterval(() => {
-    void reconcile().catch(() => {
-      // Mid-write or mid-restart; the next tick tries again.
-    })
-    // Faster than the other watchers: someone is waiting on their first agent turn.
-  }, 2000)
-  timer.unref()
 }
 
 // The agent looks at the pages of a Word document or deck it made or was given,
@@ -277,121 +129,40 @@ function serveWordPreviews(ctx: SidecarContext): void {
   })
 }
 
-/** Size and mtime, which is enough to notice a rewrite and costs no read. */
-function presetStamp(path: string): string {
-  try {
-    const stats = statSync(path)
-    return `${stats.size}:${stats.mtimeMs}`
-  } catch {
-    return "absent"
-  }
-}
-
-async function bootSidecars(): Promise<{ apiUrl: string; dataDir: string }> {
-  const host = "127.0.0.1"
-  const packaged = app.isPackaged
-  const apiPort = await getFreePort(host)
-  const dataDir = DATA_DIR
+/** What only Electron knows: the paths beside the app, and the keychain secret. */
+function bootContext(): BootContext {
   // Linux without a keyring daemon: keep booting on Chromium's built-in key
   // rather than refusing to start; same fallback every Electron app takes.
   if (process.platform === "linux") safeStorage.setUsePlainTextEncryption(true)
-
-  const ctx: SidecarContext = {
+  const packaged = app.isPackaged
+  const appPath = app.getAppPath()
+  const resources = process.resourcesPath
+  return {
     packaged,
     // dev: backend sits next to electron/; packaged: frozen binaries in resources/
-    backendDir: join(app.getAppPath(), "..", "backend"),
-    binariesDir: process.resourcesPath,
-    host,
-    apiPort,
-    dataDir,
+    backendDir: join(appPath, "..", "backend"),
+    binariesDir: resources,
+    dataDir: DATA_DIR,
     secret: loadSecret(join(app.getPath("userData"), "secret.bin"), safeStorage),
     // Packaged: bundled embedding, voice, and parser packs. Dev: same staging dir.
     modelsDir: packaged
-      ? join(process.resourcesPath, "models")
-      : join(app.getAppPath(), "..", "backend", "models"),
+      ? join(resources, "models")
+      : join(appPath, "..", "backend", "models"),
     // The staged llama.cpp build, same bytes either way: `fetch-llamacpp.mjs`
     // writes electron/llamacpp/ and packaging copies that folder verbatim.
     llamacppBinariesDir: packaged
-      ? join(process.resourcesPath, "llamacpp")
-      : join(app.getAppPath(), "llamacpp"),
+      ? join(resources, "llamacpp")
+      : join(appPath, "llamacpp"),
     // The staged audio.cpp build, same bytes either way, as for llama.cpp.
     audioBinariesDir: packaged
-      ? join(process.resourcesPath, "audiocpp")
-      : join(app.getAppPath(), "audiocpp"),
+      ? join(resources, "audiocpp")
+      : join(appPath, "audiocpp"),
+    // Same staging in both modes, like llama.cpp.
+    sdcppBinariesDir: packaged ? join(resources, "sdcpp") : join(appPath, "sdcpp"),
+    opencodeBinariesDir: packaged
+      ? join(resources, "opencode")
+      : join(appPath, "opencode"),
   }
-  // Unconditional, because dev needs a runtime too and DATA_DIR already keeps
-  // dev models out of the real install (~/.surfsense-dev).
-  ctx.llamacppPort = await getFreePort(host)
-  ctx.llamacppModelsDir = join(dataDir, "models")
-  ctx.llamacppUrl = `http://${host}:${ctx.llamacppPort}`
-  // llama-server exits 1 when --models-dir does not exist, and on a clean
-  // install nothing has created it yet: only a download would, and a download
-  // needs the runtime. Measured: "failed to initialize router models: error:
-  // '<path>' does not exist or is not a directory".
-  mkdirSync(ctx.llamacppModelsDir, { recursive: true })
-
-  // Dev too, as for llama.cpp: podcasts are voiced by the binary that ships.
-  ctx.audioPort = await getFreePort(host)
-  ctx.audioUrl = `http://${host}:${ctx.audioPort}`
-  ctx.audioModelsDir = join(dataDir, "audio")
-  mkdirSync(ctx.audioModelsDir, { recursive: true })
-
-  // Same staging in both modes, like llama.cpp. Only a host with a staged
-  // sd-server gets an images dir: without one the API offers no image models,
-  // rather than downloads that can never run.
-  const sdcppBinariesDir = packaged
-    ? join(process.resourcesPath, "sdcpp")
-    : join(app.getAppPath(), "sdcpp")
-  if (existsSync(sdcppBinaryPath({ ...ctx, sdcppBinariesDir }))) {
-    ctx.sdcppBinariesDir = sdcppBinariesDir
-    ctx.imagePort = await getFreePort(host)
-    ctx.imageModelsDir = join(dataDir, "images")
-    ctx.imageUrl = `http://${host}:${ctx.imagePort}`
-  }
-
-  // Same staging in both modes. Only a host with a staged opencode gets an
-  // agent: the port and password are chosen now so the API knows where it will
-  // be, and opencode itself waits for the API's configuration (watchAgentConfig).
-  const opencodeBinariesDir = packaged
-    ? join(process.resourcesPath, "opencode")
-    : join(app.getAppPath(), "opencode")
-  if (existsSync(opencodeBinaryPath({ ...ctx, opencodeBinariesDir }))) {
-    ctx.opencodeBinariesDir = opencodeBinariesDir
-    ctx.opencodePort = await getFreePort(host)
-    ctx.opencodePassword = randomBytes(32).toString("base64url")
-    ctx.docxSnapshotKey = randomBytes(32).toString("base64url")
-    ctx.opencodeUrl = `http://${host}:${ctx.opencodePort}`
-    ctx.agentDir = join(dataDir, "agent")
-    mkdirSync(ctx.agentDir, { recursive: true })
-    await stopLeftoverOpencode(ctx.agentDir, host)
-    // Each run's API writes its own; the last run's names a key this one never made.
-    rmSync(opencodeConfigPath(ctx.agentDir), { force: true })
-  }
-
-  // llamacppSpec is null in dev, where no binary is staged. sd-server is absent
-  // here on purpose: watchImageModel owns it, because only the API knows which
-  // model was chosen.
-  const specs = [
-    apiSpec(ctx),
-    workerSpec(ctx, "ingest"),
-    workerSpec(ctx, "studio"),
-    llamacppSpec(ctx),
-    // Null until the API's config names an audio model.
-    audiocppSpec(ctx),
-  ].filter(
-    (s): s is SidecarSpec => s !== null
-  )
-  sidecars = startAll(specs, onSidecarCrash)
-  watchImageModel(ctx)
-  watchGenerationPreset(ctx)
-  watchAudioModels(ctx)
-  watchAgentConfig(ctx)
-  serveWordPreviews(ctx)
-
-  // gate on the API only; fail fast if it dies during startup. llama-server is
-  // best-effort (its state shows via /llm/providers; an early exit hits onSidecarCrash).
-  await waitForHealth(host, apiPort, { child: sidecars.get("api") })
-  return { apiUrl: `http://${host}:${apiPort}`, dataDir }
 }
 
 function registerDocumentHandlers(dataDir: string): void {
@@ -451,6 +222,34 @@ function registerDocumentHandlers(dataDir: string): void {
     if (allowed) await shell.openExternal(allowed)
   })
 
+  // A link from content the user confirmed in the link popup, which named its host.
+  ipcMain.handle("shell:open-confirmed-link", async (event, url) => {
+    if (
+      !trusted(event.sender) ||
+      event.senderFrame !== event.sender.mainFrame ||
+      typeof url !== "string"
+    ) {
+      return
+    }
+    const confirmed = confirmedExternalUrl(url)
+    if (confirmed) await shell.openExternal(confirmed)
+  })
+
+  // A listed plugin's page by its id: the address comes from the registry, not the page.
+  ipcMain.handle("shell:open-plugin-page", async (event, pluginId, page) => {
+    if (
+      !trusted(event.sender) ||
+      event.senderFrame !== event.sender.mainFrame ||
+      typeof pluginId !== "string" ||
+      typeof page !== "string" ||
+      apiUrl === null
+    ) {
+      return
+    }
+    const address = await pluginPageUrl(apiUrl, pluginId, page as PluginPage)
+    if (address) await shell.openExternal(address)
+  })
+
   ipcMain.handle("documents:reveal", async (event, workspaceId, documentId) => {
     if (
       !trusted(event.sender) ||
@@ -468,59 +267,6 @@ function registerDocumentHandlers(dataDir: string): void {
         : "Couldn’t locate the source."
     }
   })
-}
-
-// Updates are the one call the app makes on its own, so they are off until the
-// user turns them on; "Check now" in Settings works either way.
-async function registerUpdateHandlers(): Promise<void> {
-  const prefsPath = join(app.getPath("userData"), "updates.json")
-  const trusted = (sender: Electron.WebContents): boolean =>
-    mainWindow !== null && sender === mainWindow.webContents
-  const broadcast = (state: UpdateState) =>
-    mainWindow?.webContents.send("updates:state", state)
-
-  let updates: Updates
-  if (app.isPackaged) {
-    // GitHub's CDN rejects the multi-range requests differential updates need.
-    autoUpdater.disableDifferentialDownload = true
-    // Its default logger is the console, which a packaged app shows nowhere.
-    const log = (message: unknown) => sessionLog.append("updater", String(message))
-    autoUpdater.logger = { info: log, warn: log, error: log }
-    updates = attachUpdater(autoUpdater, broadcast)
-  } else {
-    // ponytail: dev has no signed build to update; expose the same surface
-    // so the Settings row renders, and stay idle.
-    updates = {
-      check: async () => undefined,
-      install: () => undefined,
-      state: () => ({ status: "idle" }),
-    }
-  }
-
-  const check = (): void => {
-    writeUpdatePrefs(prefsPath, {
-      ...readUpdatePrefs(prefsPath),
-      lastCheckedAt: new Date().toISOString(),
-    })
-    void updates.check()
-  }
-
-  ipcMain.handle("updates:prefs", () => readUpdatePrefs(prefsPath))
-  ipcMain.handle("updates:set-automatic", (event, automatic: unknown) => {
-    if (!trusted(event.sender)) return readUpdatePrefs(prefsPath)
-    const prefs = { ...readUpdatePrefs(prefsPath), automatic: automatic === true }
-    writeUpdatePrefs(prefsPath, prefs)
-    return prefs
-  })
-  ipcMain.handle("updates:state", () => updates.state())
-  ipcMain.handle("updates:check", (event) => {
-    if (trusted(event.sender)) check()
-  })
-  ipcMain.handle("updates:install", (event) => {
-    if (trusted(event.sender)) updates.install()
-  })
-
-  if (readUpdatePrefs(prefsPath).automatic) check()
 }
 
 function applyTitleBarOverlay(
@@ -653,9 +399,7 @@ function createWindow(apiUrl: string): void {
   })
 
   if (app.isPackaged) {
-    void win.loadFile(
-      join(app.getAppPath(), "..", "frontend", "dist", "index.html")
-    )
+    void win.loadFile(PACKAGED_PAGE)
   } else {
     void win.loadURL(DEV_RENDERER_URL)
   }
@@ -676,13 +420,15 @@ async function quitWithConfirmation(): Promise<boolean> {
   }
 }
 
-async function shutdown(): Promise<void> {
-  if (shuttingDown) return
+/** Stop watchers and snapshots first, then reap the sidecars they would otherwise restart. */
+const shutdown = stopOnce(async () => {
   shuttingDown = true
+  stopSidecarWatchers?.()
+  stopPrivacyChoices?.()
   stopDocxSnapshots?.()
   withdrawApiUrl(DATA_DIR)
   if (sidecars) await stopAll(sidecars)
-}
+})
 
 function denyAppWindows(contents: Electron.WebContents): void {
   contents.setWindowOpenHandler(({ url }) => {
@@ -694,8 +440,13 @@ function denyAppWindows(contents: Electron.WebContents): void {
     event.preventDefault()
     openAllowedExternal(url)
   })
+  // will-navigate covers the window's own page only; a viewer's frame navigating itself is this.
+  contents.on("will-frame-navigate", (event) => {
+    if (!event.isMainFrame && !frameMayNavigate(event.url)) event.preventDefault()
+  })
 }
 
+/** Register the app lifecycle: boot sidecars when ready, create the window, and reap everything on quit. */
 function main(): void {
   app.on("web-contents-created", (_event, contents) => {
     denyAppWindows(contents)
@@ -723,8 +474,12 @@ function main(): void {
     .then(async () => {
       applyLocalePreference(loadLocalePreference())
       applyDevAppIdentity()
-      const boot = await bootSidecars()
+      const boot = await bootSidecars(bootContext(), onSidecarCrash)
       apiUrl = boot.apiUrl
+      sidecars = boot.sidecars
+      stopSidecarWatchers = boot.stopWatching
+      serveWordPreviews(boot.ctx)
+      await boot.waitHealthy()
       announceApiUrl(boot.dataDir, boot.apiUrl)
       registerDocumentHandlers(boot.dataDir)
       registerLocaleHandlers({
@@ -732,13 +487,33 @@ function main(): void {
           mainWindow !== null && sender === mainWindow.webContents,
       })
       registerAboutHandlers()
+      registerDataFolderHandlers({
+        dataDir: boot.dataDir,
+        isTrusted: (sender) =>
+          mainWindow !== null && sender === mainWindow.webContents,
+      })
       registerSessionLogHandlers({
         isTrusted: (sender) =>
           mainWindow !== null && sender === mainWindow.webContents,
       })
+      registerMicrophoneHandlers({
+        ipc: ipcMain,
+        isTrusted: (sender) =>
+          mainWindow !== null && sender === mainWindow.webContents,
+        system: {
+          platform: process.platform,
+          preferences: systemPreferences,
+          openExternal: (url) => shell.openExternal(url),
+        },
+      })
       installMenu()
       createWindow(boot.apiUrl)
-      await registerUpdateHandlers()
+      // Automatic checks are off until the user turns them on. Check now works
+      // either way, unless an admin policy turns updates off.
+      stopPrivacyChoices = startPrivacyChoices({
+        apiUrl: boot.apiUrl,
+        mainWindow: () => mainWindow,
+      }).stop
       app.on("activate", () => {
         if (mainWindow === null) createWindow(boot.apiUrl)
       })
@@ -773,6 +548,13 @@ app.commandLine.appendSwitch(
 
 // Also before whenReady(): the default session is created with the app.
 refuseSpellcheckDownloads(app)
+installPermissionHandlers(app, {
+  appPage: app.isPackaged
+    ? pathToFileURL(PACKAGED_PAGE)
+    : new URL(DEV_RENDERER_URL),
+  isMainWindow: (contents) =>
+    mainWindow !== null && contents === mainWindow.webContents,
+})
 
 // one app, one set of sidecars: a second instance would fight over the SQLite
 // file and the port, so hand off to the primary window and quit

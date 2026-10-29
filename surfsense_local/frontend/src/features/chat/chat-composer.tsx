@@ -1,12 +1,19 @@
-import { type ReactNode } from "react"
+import { type MouseEvent, type ReactNode } from "react"
 import { ComposerPrimitive, useAuiState } from "@assistant-ui/react"
 
 import { Button } from "@/components/ui/button"
 import { ArrowUp02Icon, CircleStopIcon } from "@/components/ui/icons"
+import type { Dictation } from "@/features/dictation/dictation-adapter"
+import { MicButton } from "@/features/dictation/mic/mic-button"
+import { DictationStrip } from "@/features/dictation/strip/dictation-strip"
+import { useDictationKeys } from "@/features/dictation/use-dictation-keys"
+import { useDictationStripShown } from "@/features/dictation/use-dictation-view"
 import type { ChatMode } from "@/features/models/capability/api"
 import type { ModelSelection } from "@/features/models/selection/api"
+import { PluginMentions } from "@/features/plugins/in-thread/plugin-mentions"
 import { cn } from "@/lib/utils"
 import { intl } from "@/i18n/intl"
+import type { PluginsStart } from "@/features/plugins/plugins-settings"
 
 import { ComposerImage } from "./attached-image"
 import { ComposerAddMenu } from "./composer-add-menu"
@@ -35,7 +42,8 @@ function ModelControl({
       className={className}
     />
   ) : (
-    <button
+    <Button
+      variant="bare"
       type="button"
       className={cn(
         modelControlButtonClassName,
@@ -48,20 +56,23 @@ function ModelControl({
         id: "chat_composer_set_up_model_button",
         defaultMessage: "Set up model",
       })}
-    </button>
+    </Button>
   )
 }
 
 function ComposerAction({
   isRunning,
+  onSendClick,
   className,
 }: {
   isRunning: boolean
+  // Prevented while voice input runs, which Send then stops instead.
+  onSendClick?: (event: MouseEvent<HTMLButtonElement>) => void
   className?: string
 }) {
   if (!isRunning) {
     return (
-      <ComposerPrimitive.Send asChild>
+      <ComposerPrimitive.Send asChild onClick={onSendClick}>
         <Button
           size="icon-lg"
           className={cn("rounded-xl", className)}
@@ -135,6 +146,9 @@ export function ChatComposer({
   isUploadingSources = false,
   threadMode = null,
   onNewChat,
+  onOpenPlugins,
+  dictation,
+  onOpenSpeechSettings,
 }: {
   placement: "center" | "bottom"
   model: ModelSelection | null
@@ -158,6 +172,12 @@ export function ChatComposer({
   threadMode?: ChatMode | null
   // Starts a new chat, for an open chat's offer of the other mode.
   onNewChat?: () => void
+  // Opens Settings › Plugins, from the add menu's plugins.
+  onOpenPlugins?: (start?: PluginsStart) => void
+  // Voice input; absent, the composer has no mic.
+  dictation?: Dictation
+  // Opens Settings › Speech recognition, from the mic's set-up.
+  onOpenSpeechSettings?: () => void
 }) {
   const newChatMode = useNewChatMode(model)
   // The agent reads no attached images yet: an Agentic chat takes none. Images
@@ -168,6 +188,27 @@ export function ChatComposer({
   const atLimit = useAuiState(
     ({ composer }) => composer.text.length >= QUESTION_MAX_CHARS
   )
+  const dictationKeys = useDictationKeys(dictation)
+  const stripShown = useDictationStripShown(dictation)
+  const inputDisabled =
+    !model || !providerAvailable || blockedPlaceholder !== undefined
+  const mic = (className: string) =>
+    dictation ? (
+      <MicButton
+        dictation={dictation}
+        disabled={inputDisabled || atLimit}
+        onOpenSpeechSettings={onOpenSpeechSettings}
+        className={className}
+      />
+    ) : null
+  const strip = (className: string) =>
+    dictation ? (
+      <DictationStrip
+        dictation={dictation}
+        onOpenSpeechSettings={onOpenSpeechSettings}
+        className={className}
+      />
+    ) : null
   const limitNotice = atLimit
     ? intl.formatMessage(
         {
@@ -187,12 +228,13 @@ export function ChatComposer({
       }
       onUploadSources={onUploadSources}
       isUploadingSources={isUploadingSources}
+      onManagePlugins={onOpenPlugins}
       className={className}
     />
   )
   return (
     <div
-      className="relative mx-auto w-full max-w-xl"
+      className="relative mx-auto w-full max-w-2xl"
       data-composer-placement={placement}
     >
       {notice ? (
@@ -209,75 +251,100 @@ export function ChatComposer({
       ) : null}
       <ComposerPrimitive.Root
         className={cn(
-          "relative rounded-2xl border bg-card p-1.5 shadow-sm transition-colors focus-within:border-ring/40 hover:border-ring/40",
+          // No top padding: the text scrolls up to the border, not to a strip
+          // above it, and holds that space in its own padding instead.
+          "relative rounded-2xl border bg-card px-1.5 pb-1.5 shadow-sm transition-colors focus-within:border-ring/40 hover:border-ring/40",
           placement === "bottom" && "flex items-end gap-2"
         )}
       >
-        {placement === "bottom" ? addMenu("-mr-1.5 mb-0.5") : null}
-        <ComposerPrimitive.Input
-          autoFocus
-          unstable_focusOnThreadSwitched
-          aria-describedby={describedBy}
-          // Held whenever a send could not go anywhere: no model, a model that
-          // can't be used, or egress to it still off.
-          disabled={
-            !model || !providerAvailable || blockedPlaceholder !== undefined
-          }
-          className={cn(
-            "max-h-44 resize-none bg-transparent px-2 py-2.5 text-sm outline-none placeholder:text-muted-foreground",
-            placement === "center"
-              ? "block min-h-20 w-full pb-12"
-              : "min-h-10 flex-1"
-          )}
-          placeholder={
-            blockedPlaceholder !== undefined
-              ? blockedPlaceholder
-              : !model || providerAvailable
-                ? placement === "center"
-                  ? intl.formatMessage({
-                      id: "chat_composer_start_placeholder",
-                      defaultMessage: "Turn your sources into answers",
-                    })
+        <ComposerPrimitive.Unstable_TriggerPopoverRoot>
+          {/* Plugins reach Agentic threads only, so only their composer names tools. */}
+          {agentic ? <PluginMentions /> : null}
+          {placement === "bottom" ? addMenu("-mr-1.5 mb-0.5") : null}
+          <ComposerPrimitive.Input
+            autoFocus
+            unstable_focusOnThreadSwitched
+            aria-describedby={describedBy}
+            // Held whenever a send could not go anywhere: no model, a model that
+            // can't be used, or egress to it still off.
+            disabled={inputDisabled}
+            // Voice input writes the text meanwhile; the box keeps its focus and keys.
+            readOnly={dictationKeys.recording}
+            cancelOnEscape={!dictationKeys.recording}
+            onKeyDown={dictationKeys.onKeyDown}
+            className={cn(
+              "max-h-44 resize-none bg-transparent px-2 pt-4 pb-2.5 text-sm outline-none placeholder:text-muted-foreground",
+              placement === "center"
+                ? "block min-h-12 w-full"
+                : "min-h-10 flex-1"
+            )}
+            placeholder={
+              blockedPlaceholder !== undefined
+                ? blockedPlaceholder
+                : !model || providerAvailable
+                  ? placement === "center"
+                    ? intl.formatMessage({
+                        id: "chat_composer_start_placeholder",
+                        defaultMessage: "Turn your sources into answers",
+                      })
+                    : intl.formatMessage({
+                        id: "chat_composer_follow_up_placeholder",
+                        defaultMessage: "Follow up on this answer",
+                      })
                   : intl.formatMessage({
-                      id: "chat_composer_follow_up_placeholder",
-                      defaultMessage: "Follow up on this answer",
+                      id: "chat_composer_provider_offline_placeholder",
+                      defaultMessage: "Reconnect your model provider to send",
                     })
-                : intl.formatMessage({
-                    id: "chat_composer_provider_offline_placeholder",
-                    defaultMessage: "Reconnect your model provider to send",
-                  })
-          }
-          submitMode="enter"
-          addAttachmentOnPaste={readsImages && !agentic}
-          rows={1}
-          maxLength={QUESTION_MAX_CHARS}
-          aria-label={intl.formatMessage({
-            id: "chat_composer_message_aria",
-            defaultMessage: "Message",
-          })}
-        />
-        {placement === "center" ? (
-          <>
-            <div className="absolute bottom-2 left-1.5 flex items-center gap-1">
-              {addMenu("")}
-              {model ? <ModePicker model={model} threadMode={null} /> : null}
+            }
+            submitMode="enter"
+            addAttachmentOnPaste={readsImages && !agentic}
+            rows={1}
+            maxLength={QUESTION_MAX_CHARS}
+            aria-label={intl.formatMessage({
+              id: "chat_composer_message_aria",
+              defaultMessage: "Message",
+            })}
+          />
+          {placement === "center" ? (
+            // Its own row under the text, never over it: long text scrolls
+            // inside the box and stops above the controls.
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex shrink-0 items-center gap-1">
+                {addMenu("")}
+                {model ? <ModePicker model={model} threadMode={null} /> : null}
+              </div>
+              <div className="flex min-w-0 items-center gap-2">
+                {stripShown ? (
+                  strip("max-w-56")
+                ) : (
+                  <>
+                    <SourceCount count={sourceCount} />
+                    <ModelControl
+                      model={model}
+                      onModelSetup={onModelSetup}
+                      onModelSelected={onModelSelected}
+                    />
+                  </>
+                )}
+                {mic("")}
+                <ComposerAction
+                  isRunning={isRunning}
+                  onSendClick={dictationKeys.onSendClick}
+                />
+              </div>
             </div>
-            <div className="absolute right-1.5 bottom-2 flex items-center gap-2">
-              <SourceCount count={sourceCount} />
-              <ModelControl
-                model={model}
-                onModelSetup={onModelSetup}
-                onModelSelected={onModelSelected}
+          ) : (
+            <>
+              <SourceCount count={sourceCount} className="mb-2" />
+              {mic("-mr-1 mb-0.5")}
+              <ComposerAction
+                isRunning={isRunning}
+                onSendClick={dictationKeys.onSendClick}
+                className="mb-0.5"
               />
-              <ComposerAction isRunning={isRunning} />
-            </div>
-          </>
-        ) : (
-          <>
-            <SourceCount count={sourceCount} className="mb-2" />
-            <ComposerAction isRunning={isRunning} className="mb-0.5" />
-          </>
-        )}
+            </>
+          )}
+        </ComposerPrimitive.Unstable_TriggerPopoverRoot>
       </ComposerPrimitive.Root>
       {placement === "center" && limitNotice ? (
         <p
@@ -292,23 +359,27 @@ export function ChatComposer({
           {/* Keeps its line and leaves the mode and the model name what is
           left, never less than 13rem, so a long translation truncates the
           name before wrapping. */}
-          <p className="max-w-[calc(100%-13rem)] shrink-0 text-left text-[11px] text-muted-foreground select-none">
-            {limitNotice ? (
-              <span role="status">{limitNotice}</span>
-            ) : !model || providerAvailable ? (
-              intl.formatMessage({
-                id: "chat_composer_disclaimer_body",
-                defaultMessage:
-                  "SurfSense can make mistakes. Check important answers.",
-              })
-            ) : (
-              intl.formatMessage({
-                id: "chat_composer_provider_offline_body",
-                defaultMessage:
-                  "Historical chats remain available while the provider is offline.",
-              })
-            )}
-          </p>
+          {stripShown ? (
+            strip("max-w-[calc(100%-13rem)] min-h-7 flex-1")
+          ) : (
+            <p className="max-w-[calc(100%-13rem)] shrink-0 text-left text-[11px] text-muted-foreground select-none">
+              {limitNotice ? (
+                <span role="status">{limitNotice}</span>
+              ) : !model || providerAvailable ? (
+                intl.formatMessage({
+                  id: "chat_composer_disclaimer_body",
+                  defaultMessage:
+                    "SurfSense can make mistakes. Check important answers.",
+                })
+              ) : (
+                intl.formatMessage({
+                  id: "chat_composer_provider_offline_body",
+                  defaultMessage:
+                    "Historical chats remain available while the provider is offline.",
+                })
+              )}
+            </p>
+          )}
           <div className="flex min-w-0 items-center gap-1">
             {model && threadMode !== null ? (
               <ModePicker

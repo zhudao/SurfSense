@@ -7,7 +7,6 @@ import {
   PencilEdit02Icon,
 } from "@/components/ui/icons"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ChatsDialog } from "@/features/chat/chats-dialog"
 import type { ChatThread } from "@/features/chat/api"
@@ -21,7 +20,8 @@ export type SidebarNavAction = {
   label: string
   icon: ComponentType<{ className?: string }>
   onClick: () => void
-  badge?: string
+  // Beside the label, such as <FeatureBadge stage="new" />.
+  badge?: ReactNode
   // Something happening behind the row, at its end; `ariaLabel` says it.
   indicator?: ReactNode
   ariaLabel?: string
@@ -37,6 +37,7 @@ function SidebarNavButton({
 }: Omit<SidebarNavAction, "key">) {
   return (
     <Button
+      static
       variant="ghost"
       className="w-full justify-start px-2"
       onClick={onClick}
@@ -44,11 +45,7 @@ function SidebarNavButton({
     >
       <Icon />
       <span className="text-left">{label}</span>
-      {badge ? (
-        <Badge variant="secondary" className="ml-2 rounded-md">
-          {badge}
-        </Badge>
-      ) : null}
+      {badge ? <span className="ml-2 flex">{badge}</span> : null}
       {indicator ? (
         <span
           aria-hidden

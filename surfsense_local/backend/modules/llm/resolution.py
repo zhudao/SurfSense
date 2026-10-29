@@ -4,6 +4,9 @@ from sqlalchemy.orm import Session
 
 from modules.egress import service as egress
 from modules.llm.catalog.local.dependencies import get_local_catalog
+from modules.llm.catalog.local.engines.audiocpp.audio_folder.installed_recognisers import (
+    InstalledRecogniser,
+)
 from modules.llm.catalog.remote.reads_images import remote_reads_images
 from modules.llm.connections.serves import connection_serves
 from modules.llm.connections.text_generator import connection_generator
@@ -22,10 +25,17 @@ from modules.llm.providers.openai_compatible.speech import RemoteSpeech
 from modules.llm.providers.protocols import Generator, ImageGenerator, TextToSpeech
 from modules.llm.providers.sdcpp import provider as sdcpp
 from modules.llm.providers.sdcpp.generator import LocalImageGenerator
+from modules.llm.subscriptions.claude.account import CLAUDE_PLAN
+from modules.llm.subscriptions.claude.hosts import require_claude_hosts
+from modules.llm.subscriptions.claude.usable_claude import usable_claude
 
 
 class ModelResolutionError(RuntimeError):
     pass
+
+
+class NoSpeechModelError(ModelResolutionError):
+    """No speech model is chosen, or the chosen one is no longer installed."""
 
 
 @dataclass(frozen=True)
@@ -43,6 +53,13 @@ class ResolvedGeneration:
 class ResolvedImageGeneration:
     selection: SelectedModel
     generator: ImageGenerator
+
+
+@dataclass(frozen=True)
+class ResolvedSpeechToText:
+    selection: SelectedModel
+    # The installed file and the reviewed languages the client is built from.
+    recogniser: InstalledRecogniser
 
 
 def resolve_generation(session: Session) -> ResolvedGeneration:
@@ -175,6 +192,18 @@ def local_speech(selected: SelectedModel) -> AudioCppSpeech:
     )
 
 
+def resolve_speech_to_text(session: Session) -> ResolvedSpeechToText:
+    """The chosen speech model as the transcription server runs it. Local only:
+    no remote speech client exists."""
+    selected = session.get(SelectedModel, ModelType.SPEECH_TO_TEXT)
+    if selected is None or selected.provider != audiocpp.PROVIDER:
+        raise NoSpeechModelError("no speech model selected")
+    recogniser = get_local_catalog().audiocpp.installed_recogniser(selected.name)
+    if recogniser is None:
+        raise NoSpeechModelError("the speech model is not installed")
+    return ResolvedSpeechToText(selected, recogniser)
+
+
 def _require_serves(connection: ProviderConnection, model_type: ModelType) -> None:
     if model_type not in connection_serves(connection):
         raise ModelResolutionError(f"this connection does not serve {model_type.value}")
@@ -184,6 +213,11 @@ def _connection(session: Session, selected: SelectedModel) -> ProviderConnection
     """The selection's connection, once egress to its host is allowed."""
     connection = stored_connection(session, selected)
     egress.require(session, egress.host_destination(connection.base_url))
+    if connection.auth_kind == CLAUDE_PLAN:
+        # Claude Code also refreshes its sign-in on a host of its own.
+        require_claude_hosts(session)
+        # Before anything streams, so the send is refused and the composer says why.
+        usable_claude()
     return connection
 
 

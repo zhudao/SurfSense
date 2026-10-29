@@ -54,6 +54,19 @@ class Voicing:
     languages: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class Transcribing:
+    """What a recogniser takes and hears, from its reviewed entry."""
+
+    # Measured on the first request, the load included.
+    peak_mb: int
+    # The longest window a request carries.
+    window_s: int
+    detects_language: bool
+    # The languages it is listed for: those measured usable.
+    languages: tuple[str, ...]
+
+
 class Origin(StrEnum):
     CURATED = "curated"
     DOWNLOADED = "downloaded"
@@ -107,8 +120,10 @@ class LocalRow:
     # The build the row shows and its Download fetches, and why. None for a
     # searched repo, which lists every build and leads with none.
     lead: Lead | None = None
-    # An audio model's only.
+    # A voice model's only.
     voicing: Voicing | None = None
+    # A recogniser's only.
+    transcription: Transcribing | None = None
     # What the model is for, as its entry says; an embedder's only, which
     # onboarding lists without a chat model's fit and badges to tell them apart.
     description: str | None = None
@@ -127,7 +142,7 @@ class LocalRow:
         return self.classification.reason or UNSUPPORTED_REASON
 
     @property
-    def not_runnable_code(self) -> NotRunnableCode | None:
+    def not_runnable_code(self) -> StrEnum | None:
         """The reason as a code. None for a reason that has none, which the
         interface shows as it came."""
         if self.runnable:

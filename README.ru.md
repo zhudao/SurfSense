@@ -11,7 +11,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Discord](https://img.shields.io/discord/1359368468260192417?label=Discord)](https://discord.gg/ejRNvftDp9)
 
-  <a href="https://www.surfsense.com/"><img alt="SurfSense, изолированная от сети альтернатива NotebookLM с открытым кодом" src="surfsense_web/public/homepage/banner.png" /></a>
+  <a href="https://www.surfsense.com/"><img alt="SurfSense, изолированная от сети альтернатива NotebookLM с открытым кодом" src="www/public/homepage/banner.png" /></a>
 
   <h1>SurfSense</h1>
 
@@ -26,6 +26,7 @@
     <a href="#что-surfsense-делает-с-каждым-форматом">Форматы</a> ·
     <a href="#быстрый-старт">Быстрый старт</a> ·
     <a href="#сравнение">Сравнение</a> ·
+    <a href="#плагины">Плагины</a> ·
     <a href="https://www.surfsense.com/pricing">Цены</a> ·
     <a href="https://discord.gg/ejRNvftDp9">Discord</a>
   </p>
@@ -37,18 +38,21 @@
   </p>
 </div>
 
+**Отредактируйте договор с отслеживаемыми изменениями и комментариями**
+
 https://github.com/user-attachments/assets/88326b9d-e763-46db-9635-75f9df9e8682
+
+**Добавьте источники из интернета и превратите их в веб-страницу**
+
+https://github.com/user-attachments/assets/073577b7-f055-4f59-8540-330bd764aeb0
 
 SurfSense — бесплатное настольное приложение с открытым кодом для документов, которые нельзя загрузить наружу. Это ИИ-агент в духе NotebookLM, созданный с упором на приватность: он исследует, преобразует и редактирует ваши документы на вашем компьютере. Индекс остаётся на вашем диске, модель, локальную или удалённую, выбираете вы, а аккаунта нет вовсе.
 
 | Платформа | Скачать |
 |---|---|
-| **Windows** x64 | [SurfSense-Setup.exe](https://github.com/MODSetter/SurfSense/releases/latest/download/SurfSense-Setup.exe) |
-| **macOS** Apple Silicon | [SurfSense-arm64.dmg](https://github.com/MODSetter/SurfSense/releases/latest/download/SurfSense-arm64.dmg) |
-| **Linux** x64 | [AppImage](https://github.com/MODSetter/SurfSense/releases/latest/download/SurfSense.AppImage) · [deb](https://github.com/MODSetter/SurfSense/releases/latest/download/SurfSense.deb) |
-
-> [!NOTE]
-> **Пользовались размещённым веб-приложением?** Экспортируйте рабочие области до 18 октября 2026 года и импортируйте их в это приложение. Подробности на [странице закрытия](https://www.surfsense.com/sunset).
+| **Windows** x64 | [SurfSense-Setup.exe](https://www.surfsense.com/downloads/windows?src=readme) |
+| **macOS** Apple Silicon | [SurfSense-arm64.dmg](https://www.surfsense.com/downloads/mac?src=readme) |
+| **Linux** x64 | [AppImage](https://www.surfsense.com/downloads/linux-appimage?src=readme) · [deb](https://www.surfsense.com/downloads/linux-deb?src=readme) |
 
 ## Быстрый старт
 
@@ -68,6 +72,7 @@ SurfSense — бесплатное настольное приложение с 
 | **Изображения** PNG, JPEG, TIFF, BMP, WebP | ✓ текст распознаётся через OCR³ | Изображения и инфографика² | — | Вставка в новые документы |
 | **Markdown**, обычный текст | ✓ | ✓ Markdown | — | — |
 | **HTML** | ✓ | ✓ веб-страница | — | — |
+| **Аудиозаписи** WAV, MP3, FLAC, Ogg Vorbis | ✓ расшифровываются на вашем компьютере | — | — | — |
 | **Подкаст** (аудио) | — | ✓ с расшифровкой, по умолчанию озвучивается на вашем компьютере | — | — |
 | **Интеллект-карты, карточки, тесты** | — | ✓ в приложении | — | — |
 
@@ -75,6 +80,27 @@ SurfSense — бесплатное настольное приложение с 
 
 Правки, преобразования и инструменты для PDF всегда создают новый файл; оригинал никогда не меняется. Шире всего сейчас поддерживаются PDF, Word и Excel, а поддержка остальных форматов постоянно улучшается.
 
+
+## Плагины
+
+Подключите их в разделе **Настройки › Плагины**.
+
+**От SurfSense.** Они читают общедоступные страницы без ваших собственных аккаунтов, и для них нужна лицензия SurfSense: [скачайте приложение](https://www.surfsense.com/downloads) и введите в нём свою почту, чтобы получить бесплатную лицензию на 14 дней.
+
+| Плагин | Что делает |
+|---|---|
+| **Google Search** | Ищет в Google и читает результаты, рекламу и похожие вопросы |
+| **Web Crawl** | Читает веб-страницу или обходит весь сайт, превращая его в чистый текст |
+| **YouTube** | Читает видео и каналы YouTube, а также комментарии к ним |
+| **TikTok** | Читает видео TikTok и комментарии к ним, ищет пользователей и показывает, что сейчас в тренде |
+| **Reddit** | Читает публичные посты Reddit с ветками комментариев или целое сообщество |
+| **Instagram** | Читает публичные профили, посты и рилсы Instagram и ищет профили |
+| **Google Maps** | Находит места на Google Maps и читает отзывы о них |
+| **Amazon** | Читает карточки товаров и результаты поиска на Amazon |
+| **Walmart** | Читает карточки товаров, результаты поиска и отзывы на Walmart |
+| **Indeed** | Читает вакансии на Indeed |
+
+**Сторонние.** MCP-серверы из [реестра плагинов](backend/plugins/registry), например DeepWiki и Notion, или любые другие, которые вы добавите по URL. Лицензия не нужна; они остаются выключенными, пока вы их не разрешите.
 
 ## Сравнение
 
@@ -92,18 +118,6 @@ SurfSense — бесплатное настольное приложение с 
 - **Участие в разработке:** запросы на слияние направляйте в ветку `dev`; цикл разработки описан в [CONTRIBUTING.md](CONTRIBUTING.md) и [`surfsense_local/`](./surfsense_local). Как всё устроено, рассказано в [`docs/`](docs/README.md).
 
 <a href="https://github.com/MODSetter/SurfSense/graphs/contributors"><img src="https://contrib.rocks/image?repo=MODSetter/SurfSense" alt="Участники SurfSense" /></a>
-
-## История звёзд
-
-<p align="center">
-  <a href="https://www.star-history.com/#MODSetter/SurfSense&Date">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=MODSetter/SurfSense&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=MODSetter/SurfSense&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=MODSetter/SurfSense&type=Date" />
-    </picture>
-  </a>
-</p>
 
 ## Лицензия
 

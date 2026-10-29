@@ -59,6 +59,18 @@ export function applyFrame(
         assistant,
       ]
     }
+    case "agent-plugins-unavailable":
+      // One at the start, and one more for each plugin refused mid-turn: a plugin named
+      // again keeps its latest reason.
+      return content((current) => ({
+        ...current,
+        unavailable_plugins: [
+          ...(current.unavailable_plugins ?? []).filter(
+            (named) => !event.plugins.some((p) => p.title === named.title)
+          ),
+          ...event.plugins,
+        ],
+      }))
     case "run-state":
       return content((current) =>
         event.state === "queued"
@@ -139,8 +151,8 @@ function turn(
 function stepFrom(
   event: Extract<ChatStreamEvent, { type: "agent-step" }>
 ): AgentStep {
-  const { id, tool, status, title, input, output, error, artifact } = event
-  return { id, tool, status, title, input, output, error, artifact }
+  const { id, call_id, tool, status, input, output, error, artifact } = event
+  return { id, call_id, tool, status, input, output, error, artifact }
 }
 
 /** An agent turn's preparing line shows from its frame until any other arrives. */

@@ -11,7 +11,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Discord](https://img.shields.io/discord/1359368468260192417?label=Discord)](https://discord.gg/ejRNvftDp9)
 
-  <a href="https://www.surfsense.com/"><img alt="SurfSense。ネットワークから切り離して使える、オープンソースの NotebookLM 代替" src="surfsense_web/public/homepage/banner.png" /></a>
+  <a href="https://www.surfsense.com/"><img alt="SurfSense。ネットワークから切り離して使える、オープンソースの NotebookLM 代替" src="www/public/homepage/banner.png" /></a>
 
   <h1>SurfSense</h1>
 
@@ -26,6 +26,7 @@
     <a href="#形式ごとにできること">形式</a> ·
     <a href="#クイックスタート">クイックスタート</a> ·
     <a href="#surfsenseの比較">比較</a> ·
+    <a href="#プラグイン">プラグイン</a> ·
     <a href="https://www.surfsense.com/pricing">料金</a> ·
     <a href="https://discord.gg/ejRNvftDp9">Discord</a>
   </p>
@@ -37,18 +38,21 @@
   </p>
 </div>
 
+**契約書に変更履歴とコメントで朱入れ**
+
 https://github.com/user-attachments/assets/88326b9d-e763-46db-9635-75f9df9e8682
+
+**ウェブからソースを追加して、Webページに仕上げる**
+
+https://github.com/user-attachments/assets/073577b7-f055-4f59-8540-330bd764aeb0
 
 SurfSense は、アップロードできない文書のための、無料のオープンソース・デスクトップアプリです。プライバシーを重視した NotebookLM のような AI エージェントが、手元の文書を自分のマシン上で調査し、変換し、編集します。索引は自分のディスクに残り、モデルはローカルでもリモートでも自分で選べます。アカウントも要りません。
 
 | プラットフォーム | ダウンロード |
 |---|---|
-| **Windows** x64 | [SurfSense-Setup.exe](https://github.com/MODSetter/SurfSense/releases/latest/download/SurfSense-Setup.exe) |
-| **macOS** Apple Silicon | [SurfSense-arm64.dmg](https://github.com/MODSetter/SurfSense/releases/latest/download/SurfSense-arm64.dmg) |
-| **Linux** x64 | [AppImage](https://github.com/MODSetter/SurfSense/releases/latest/download/SurfSense.AppImage) · [deb](https://github.com/MODSetter/SurfSense/releases/latest/download/SurfSense.deb) |
-
-> [!NOTE]
-> **ホスト版の Web アプリを使っていましたか？** 2026 年 10 月 18 日より前にワークスペースをエクスポートし、こちらにインポートしてください。詳細は[提供終了のページ](https://www.surfsense.com/sunset)をご覧ください。
+| **Windows** x64 | [SurfSense-Setup.exe](https://www.surfsense.com/downloads/windows?src=readme) |
+| **macOS** Apple Silicon | [SurfSense-arm64.dmg](https://www.surfsense.com/downloads/mac?src=readme) |
+| **Linux** x64 | [AppImage](https://www.surfsense.com/downloads/linux-appimage?src=readme) · [deb](https://www.surfsense.com/downloads/linux-deb?src=readme) |
 
 ## クイックスタート
 
@@ -68,12 +72,34 @@ SurfSense は、アップロードできない文書のための、無料のオ�
 | **画像** PNG、JPEG、TIFF、BMP、WebP | ✓ 文字は OCR で読み取る³ | 画像とインフォグラフィック² | — | 新しい文書に配置する |
 | **Markdown**、プレーンテキスト | ✓ | ✓ Markdown | — | — |
 | **HTML** | ✓ | ✓ Webページ | — | — |
+| **録音** WAV、MP3、FLAC、Ogg Vorbis | ✓ 自分のマシン上で文字起こし | — | — | — |
 | **ポッドキャスト**（音声） | — | ✓ 文字起こし付き。初期状態では自分のマシン上で読み上げる | — | — |
 | **マインドマップ、フラッシュカード、クイズ** | — | ✓ アプリ内で | — | — |
 
 <sub>¹ 設定で Officeサポート（LibreOffice）をオンにすると使えます。LibreOffice がインストーラーに含まれることはありません。² ローカルまたはリモートの画像モデルが必要です。初期状態ではどれも選ばれていません。³ OCR が読めるのは、ラテン文字、中国語、日本語の文字です。</sub>
 
 編集、変換、PDF ツールは、いつも新しいファイルを作ります。元のファイルが変更されることはありません。現時点でいちばん多くのことができるのは PDF、Word、Excel で、ほかの形式への対応も改善を続けています。
+
+## プラグイン
+
+**設定 › プラグイン**で接続します。
+
+**SurfSense提供。** 自分のアカウントを使わずに公開ページを読み取ります。利用には SurfSense ライセンスが必要です。[アプリをダウンロード](https://www.surfsense.com/downloads)し、アプリでメールアドレスを入力すると、14 日間の無料ライセンスを受け取れます。
+
+| プラグイン | できること |
+|---|---|
+| **Google Search** | Google で検索し、検索結果、広告、関連する質問を読み取る |
+| **Web Crawl** | Webページを読み取るか、サイト全体をクロールしてクリーンなテキストにする |
+| **YouTube** | YouTube の動画、チャンネル、それらのコメントを読み取る |
+| **TikTok** | TikTok の動画とそのコメントを読み取り、ユーザーを検索し、トレンドを確認する |
+| **Reddit** | Reddit の公開投稿とそのコメントスレッド、またはコミュニティ全体を読み取る |
+| **Instagram** | Instagram の公開プロフィール、投稿、リールを読み取り、プロフィールを検索する |
+| **Google Maps** | Google Maps で場所を探し、そのレビューを読み取る |
+| **Amazon** | Amazon の商品と検索結果を読み取る |
+| **Walmart** | Walmart の商品、検索結果、レビューを読み取る |
+| **Indeed** | Indeed の求人情報を読み取る |
+
+**サードパーティ。** [プラグインレジストリ](backend/plugins/registry)にある DeepWiki や Notion などの MCP サーバーや、URL を指定して自分で追加したサーバーです。ライセンスは不要で、許可するまではオフのままです。
 
 ## SurfSenseの比較
 
@@ -91,18 +117,6 @@ SurfSense は、アップロードできない文書のための、無料のオ�
 - **開発への参加：** PR は `dev` に向けて出してください。開発の流れは [CONTRIBUTING.md](CONTRIBUTING.md) と [`surfsense_local/`](./surfsense_local) にあります。仕組みの説明は [`docs/`](docs/README.md) にあります。
 
 <a href="https://github.com/MODSetter/SurfSense/graphs/contributors"><img src="https://contrib.rocks/image?repo=MODSetter/SurfSense" alt="SurfSense のコントリビューター" /></a>
-
-## スター履歴
-
-<p align="center">
-  <a href="https://www.star-history.com/#MODSetter/SurfSense&Date">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=MODSetter/SurfSense&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=MODSetter/SurfSense&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=MODSetter/SurfSense&type=Date" />
-    </picture>
-  </a>
-</p>
 
 ## ライセンス
 

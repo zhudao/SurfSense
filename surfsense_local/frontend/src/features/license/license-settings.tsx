@@ -18,11 +18,12 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { ExternalLink } from "@/features/about/external-link"
+import { useAppDetails } from "@/features/about/use-app-details"
 import { SettingsSection } from "@/features/settings/settings-section"
 import { intl } from "@/i18n/intl"
 
 import { translatedLicenseError } from "./license-error-text"
-import { PRICING_URL } from "./license-links"
+import { pricingUrl } from "./license-links"
 import {
   importLicense,
   readLicense,
@@ -31,6 +32,7 @@ import {
 } from "./api"
 import { TrialButton } from "./trial-button"
 import { licenseQueryKey, useLicense } from "./use-license"
+import { refreshLicenseVerdict } from "@/features/plugins/license-verdict"
 
 const DAY = 24 * 60 * 60 * 1000
 const EXPIRY_NOTICE_DAYS = 14
@@ -46,10 +48,15 @@ function planLabel(plan: string) {
   )
 }
 
-function notice(status: LicenseStatus): {
+function notice(
+  status: LicenseStatus,
+  version: string | undefined
+): {
   title: string
   description: string
   link?: { href: string; label: string }
+  /** A heads-up rather than a problem reads quieter. */
+  variant?: "secondary"
 } | null {
   if (status.state === "clock_untrusted") {
     return {
@@ -76,7 +83,7 @@ function notice(status: LicenseStatus): {
           "This license has expired. Renewing issues a new file to add here.",
       }),
       link: {
-        href: PRICING_URL,
+        href: pricingUrl("license_renew", version),
         label: intl.formatMessage({
           id: "license_expired_notice_link",
           defaultMessage: "Renew license",
@@ -100,6 +107,7 @@ function notice(status: LicenseStatus): {
           },
           { count: days }
         ),
+        variant: "secondary",
       }
     }
   }
@@ -256,6 +264,7 @@ function LicenseFormDialog({
 export function LicenseSettings() {
   const queryClient = useQueryClient()
   const license = useLicense()
+  const version = useAppDetails().data?.version
   const [editor, setEditor] = useState<"add" | "replace" | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const openEditor = (mode: "add" | "replace") => {
@@ -268,8 +277,11 @@ export function LicenseSettings() {
   const status = license.data ?? null
   // Straight into the cache rather than local state, so the sidebar's license
   // row reacts to an import here without refetching.
-  const publish = (next: LicenseStatus) =>
+  const publish = (next: LicenseStatus) => {
     queryClient.setQueryData(licenseQueryKey, next)
+    // The paid plugins show what the new license unlocks, before anyone opens Plugins.
+    void refreshLicenseVerdict(queryClient, { ifStale: false })
+  }
 
   const remove = async () => {
     setBusy(true)
@@ -284,7 +296,8 @@ export function LicenseSettings() {
     }
   }
 
-  const shown = status && status.state !== "none" ? notice(status) : null
+  const shown =
+    status && status.state !== "none" ? notice(status, version) : null
   const error =
     actionError ?? (license.error ? messageFrom(license.error) : null)
   const loading = license.isPending
@@ -317,7 +330,7 @@ export function LicenseSettings() {
                 defaultMessage: "No license on this device",
               })}
             </p>
-            <ExternalLink href={PRICING_URL}>
+            <ExternalLink href={pricingUrl("license_pricing", version)}>
               {intl.formatMessage({
                 id: "license_settings_pricing_link",
                 defaultMessage: "See pricing",
@@ -431,7 +444,7 @@ export function LicenseSettings() {
       ) : null}
 
       {shown ? (
-        <Alert role="status" className="mt-6">
+        <Alert role="status" variant={shown.variant} className="mt-6">
           <CircleAlertIcon />
           <AlertTitle>{shown.title}</AlertTitle>
           <AlertDescription className="flex flex-col items-start gap-1">

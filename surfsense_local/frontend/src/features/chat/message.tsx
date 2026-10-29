@@ -11,7 +11,12 @@ import type { Components, ExtraProps } from "streamdown"
 
 import { RelativeTime } from "@/components/relative-time"
 import { AgentSteps } from "@/features/agent/agent-steps"
-import type { AgentStep, TurnSources } from "@/features/agent/api"
+import type {
+  AgentStep,
+  TurnSources,
+  UnavailablePlugin,
+} from "@/features/agent/api"
+import { PluginsUnavailable } from "@/features/agent/plugins-unavailable"
 import { WorkingFrom } from "@/features/agent/working-from"
 import { OfficeOfferBanner } from "@/features/office-support/office-offer-banner"
 import {
@@ -182,8 +187,39 @@ function stepsFrom(custom: unknown): AgentStep[] {
   return NO_STEPS
 }
 
+function unavailablePluginsFrom(custom: unknown): UnavailablePlugin[] | null {
+  if (
+    typeof custom === "object" &&
+    custom !== null &&
+    "unavailablePlugins" in custom
+  ) {
+    return (custom.unavailablePlugins as UnavailablePlugin[] | null) ?? null
+  }
+  return null
+}
+
+function MessagePluginsUnavailable() {
+  const plugins = useAuiState(({ message }) =>
+    unavailablePluginsFrom(message.metadata.custom)
+  )
+  return <PluginsUnavailable plugins={plugins} />
+}
+
+function threadIdFrom(custom: unknown): number | null {
+  if (typeof custom === "object" && custom !== null && "threadId" in custom) {
+    return (custom.threadId as number | null) ?? null
+  }
+  return null
+}
+
 function MessageSteps() {
   const steps = useAuiState(({ message }) => stepsFrom(message.metadata.custom))
+  const threadId = useAuiState(({ message }) =>
+    threadIdFrom(message.metadata.custom)
+  )
+  const latest = useAuiState(
+    ({ thread, message }) => message.index === thread.messages.length - 1
+  )
   // The turn's sources are kept on the user's message this reply answers.
   const scope = useAuiState(({ thread, message }) => {
     for (let index = message.index - 1; index >= 0; index -= 1) {
@@ -192,7 +228,14 @@ function MessageSteps() {
     }
     return null
   })
-  return <AgentSteps steps={steps} scope={scope} />
+  return (
+    <AgentSteps
+      steps={steps}
+      scope={scope}
+      threadId={threadId}
+      latest={latest}
+    />
+  )
 }
 
 type ThreadReply = { id: string; role: string; metadata: { custom: unknown } }
@@ -345,7 +388,7 @@ function MessageActions({
 
 export function UserMessage() {
   return (
-    <MessagePrimitive.Root className="mx-auto flex w-full max-w-xl flex-col items-end px-6 py-3">
+    <MessagePrimitive.Root className="mx-auto flex w-full max-w-2xl flex-col items-end px-6 py-3">
       <div className="mb-2 flex max-w-[78%] flex-wrap justify-end gap-2 empty:hidden">
         <MessagePrimitive.Attachments
           components={{ Image: MessageImage, Attachment: MessageImage }}
@@ -376,10 +419,11 @@ export function AssistantMessage({
   onNewChat: () => void
 }) {
   return (
-    <MessagePrimitive.Root className="mx-auto flex w-full max-w-xl min-w-0 flex-col items-start px-6 py-4">
+    <MessagePrimitive.Root className="mx-auto flex w-full max-w-2xl min-w-0 flex-col items-start px-6 py-4">
       <CitationProvider citations={citations} onCitation={onCitation}>
         <div className="w-full max-w-full min-w-0 text-sm leading-7">
           <MessageThinking />
+          <MessagePluginsUnavailable />
           <MessageSteps />
           <MessagePrimitive.Parts components={assistantMessageParts} />
           <MessageOfficeOffer />

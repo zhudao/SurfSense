@@ -86,6 +86,9 @@ _SPEECH_IN = (
     "automatic-speech-recognition",
     "audio-classification",
 )
+# audio.cpp's recogniser families a curated entry names as its architecture.
+# Other recognisers stay typeless until one is curated: nothing could run them.
+_SPEECH_RECOGNISERS = ("nemotron_asr", "canary_asr")
 _LABELLERS = (
     "openai-privacy-filter",
     "locateanything",
@@ -204,6 +207,16 @@ GROUPS: dict[str, Group] = {
         ),
     ),
     **dict.fromkeys(
+        _SPEECH_RECOGNISERS,
+        Group(
+            (ModelType.SPEECH_TO_TEXT,),
+            (
+                "This model writes down what it hears in audio. It cannot answer questions."
+            ),
+            NotRunnableCode.SPEECH_IN,
+        ),
+    ),
+    **dict.fromkeys(
         _AUDIO_CPP,
         Group(
             _NONE,
@@ -289,13 +302,14 @@ _TEXT = (ModelType.TEXT_GEN,)
 @dataclass(frozen=True)
 class Classification:
     """What a model is for. `reason` says why the local chat runtime cannot run
-    it, and is empty for a chat model; `code` names that reason."""
+    it, and is empty for a chat model; `code` names that reason. An opened
+    embedder repo that cannot run carries its check's code here instead."""
 
     types: tuple[ModelType, ...]
     known: bool = True
     approximate: bool = False
     reason: str = ""
-    code: NotRunnableCode | None = None
+    code: StrEnum | None = None
 
 
 def classify(

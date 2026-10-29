@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron"
 
+import type { MicrophoneAccess } from "../main/microphone/system-access.ts"
+import type { PrivacyState } from "../main/privacy-choices/privacy-controller.ts"
+
 // main passes the API base URL via additionalArguments; read it back off argv
 const FLAG = "--surfsense-api-url="
 const arg = process.argv.find((a) => a.startsWith(FLAG))
@@ -57,17 +60,71 @@ contextBridge.exposeInMainWorld("surfsense", {
         ipcRenderer.removeListener("updates:check-requested", wrapped)
     },
   },
+  // Update checks and usage statistics: what each sends, where, and the switches
+  // (contract 05, part C). State is null outside the app's own window.
+  privacy: {
+    getState: (): Promise<PrivacyState | null> =>
+      ipcRenderer.invoke("privacy:state"),
+    setUsageStatistics: async (enabled: boolean): Promise<void> => {
+      await ipcRenderer.invoke("privacy:set-usage-statistics", enabled)
+    },
+    // The updates bridge's own switch, so both bridges stay one setting.
+    setUpdatesAutomatic: async (enabled: boolean): Promise<void> => {
+      await ipcRenderer.invoke("updates:set-automatic", enabled)
+    },
+    // The exact next report, built but not sent.
+    previewUsageReport: (): Promise<unknown> =>
+      ipcRenderer.invoke("privacy:preview-usage-report"),
+    completeFirstRun: async (choices: {
+      updates: boolean
+      usageStatistics: boolean
+    }): Promise<void> => {
+      await ipcRenderer.invoke("privacy:complete-first-run", choices)
+    },
+    onStateChanged: (
+      listener: (state: PrivacyState) => void
+    ): (() => void) => {
+      const wrapped = (_event: unknown, state: PrivacyState) => listener(state)
+      ipcRenderer.on("privacy:state-changed", wrapped)
+      return () => ipcRenderer.removeListener("privacy:state-changed", wrapped)
+    },
+  },
   setTitleBarOverlay: (overlay: {
     color: string
     symbolColor: string
   }): Promise<void> => ipcRenderer.invoke("shell:titlebar-overlay", overlay),
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke("shell:open-external", url),
+  // A content link the user confirmed in the link popup: any https page.
+  openConfirmedLink: (url: string): Promise<void> =>
+    ipcRenderer.invoke("shell:open-confirmed-link", url),
+  // A listed plugin's homepage or privacy policy, named by its id.
+  openPluginPage: (
+    pluginId: string,
+    page: "homepage" | "privacy_policy"
+  ): Promise<void> =>
+    ipcRenderer.invoke("shell:open-plugin-page", pluginId, page),
   about: {
     details: () => ipcRenderer.invoke("about:details"),
+    // Where models, workspaces and settings live; null outside the app's window.
+    dataFolder: (): Promise<string | null> =>
+      ipcRenderer.invoke("about:data-folder"),
+    // "" once opened, else the OS's reason.
+    openDataFolder: (): Promise<string> =>
+      ipcRenderer.invoke("about:open-data-folder"),
   },
   sessionLog: {
     read: (): Promise<string[]> => ipcRenderer.invoke("session-log:read"),
+  },
+  // The system's switch for SurfSense's microphone; the page's own permission is main's.
+  microphone: {
+    status: (): Promise<MicrophoneAccess> =>
+      ipcRenderer.invoke("microphone:status"),
+    // macOS shows its prompt the first time; call it before getUserMedia.
+    request: (): Promise<MicrophoneAccess> =>
+      ipcRenderer.invoke("microphone:request"),
+    openSettings: (): Promise<boolean> =>
+      ipcRenderer.invoke("microphone:open-settings"),
   },
   sidecars: {
     onCrash: (listener: (crash: SidecarCrash) => void): (() => void) => {

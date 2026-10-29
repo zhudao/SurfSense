@@ -28,7 +28,8 @@ def import_tasks() -> None:
     import modules.agent.data_analysis.task
     import modules.artifacts.tasks
     import modules.documents.tasks
-    import modules.plugins.tasks
+    import modules.documents.web_sources.background_pull.pull_task
+    import modules.plugins.bundles.tasks
 
 
 def revoke_pending(queue: SqliteHuey, name: str, argument: int) -> None:

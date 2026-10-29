@@ -1,6 +1,6 @@
 # License in the desktop app
 
-The desktop app imports a Keygen license file and verifies it offline, against Ed25519 public keys compiled into the binary, and never contacts Keygen. A license is meant to unlock paid plugins, which are not built yet, and priority support, and a trial the same for its term; in the app today it changes only what Settings and the sidebar show. No state of the license ever disables the app. The check on the machine is honesty for the interface, not enforcement: the app is public and can be rebuilt without it, so enforcement belongs to the servers a paid plugin calls.
+The desktop app imports a Keygen license file and verifies it offline, against Ed25519 public keys compiled into the binary, and never contacts Keygen. A license unlocks SurfSense's paid plugins and priority support, and a trial the same for its term; in the app it changes only what Settings and the sidebar show, and its key is sent to SurfSense's plugins. No state of the license ever disables the app. The check on the machine is honesty for the interface, not enforcement: the app is public and can be rebuilt without it, so enforcement belongs to the servers a paid plugin calls.
 
 **Code:** [`surfsense_local/backend/modules/license/`](../../../surfsense_local/backend/modules/license/), [`surfsense_local/frontend/src/features/license/`](../../../surfsense_local/frontend/src/features/license/)
 **Decisions:** [ADR 0019](../../adr/0019-offline-licenses.md)
@@ -9,9 +9,9 @@ The file format is [contract 1](../../contracts/01-license-file.md); the hosted 
 
 ## What the license gates
 
-Paid plugins and priority support, nothing else, and neither is in the app yet: plugins are a proposal, and priority support is offered in the license email. Expiry stops those two and leaves the app, its data and its updates alone. Updates are free for everyone and the updater has no license logic: with public installers, an expired user could delete the license file and become a free user, so gating updates would be theater. `maxUsers` is shown, never enforced.
+Paid plugins and priority support, nothing else: priority support is offered in the license email. Expiry stops those two and leaves the app, its data and its updates alone. Updates are free for everyone and the updater has no license logic: with public installers, an expired user could delete the license file and become a free user, so gating updates would be theater. `maxUsers` is shown, never enforced.
 
-The [plugins proposal](../../proposals/plugins/README.md) specifies that a paid plugin installs and runs only with an unexpired license, a trial included. Inside the app, Settings and the sidebar are what read the license state.
+SurfSense's paid plugins run on its plugin host, and the app sends every request to them the imported key as `Authorization: License <key>`, without checking its expiry ([plugins](../plugins.md#surfsenses-own-plugins)); the host checks it with Keygen on every call ([plugin host](../plugin-host.md#the-license-check)). Importing, replacing or removing a license asks the plugin host straight away whether it unlocks them, so Settings › Plugins, `@` and the agent follow at once ([plugins](../plugins.md#the-license-verdict)). Inside the app, Settings and the sidebar are what read the license state.
 
 ## Verifying a file
 
@@ -51,7 +51,7 @@ There is one slot: importing a valid file replaces whatever was stored. That is 
 
 ## Settings and the sidebar
 
-Settings › License adds a license by choosing a `.lic` file or pasting its text, which the renderer sends to `PUT /license`. It shows the plan, the email, "Expires" or "Ended" with the date, the seat count when there is one, and Replace and Remove buttons, plus a notice when the clock is off, when the license has expired, and when it runs out within 14 days. With no license stored it links to the trial form on `/downloads` and to `/pricing`, and the expired notice links to `/pricing` and says a renewal comes as a new file to add here; both go through the About section's `ExternalLink` to the OS browser. The [portal](portal.md) has no accounts ([ADR 0024](../../adr/0024-portal-without-accounts.md)), so no string in the app sends the user to one. The links are an offer, never a wall. The sidebar footer carries one status row: green for `active`, red for every state that leaves plugins locked.
+Settings › License adds a license by choosing a `.lic` file or pasting its text, which the renderer sends to `PUT /license`. It shows the plan, the email, "Expires" or "Ended" with the date, the seat count when there is one, and Replace and Remove buttons, plus a notice when the clock is off, when the license has expired, and when it runs out within 14 days. With no license stored, both Start a free trial and the pricing link open `/pricing`, and the expired notice links to `/pricing` and says a renewal comes as a new file to add here; both go through the About section's `ExternalLink` to the OS browser. The [portal](portal.md) has no accounts ([ADR 0024](../../adr/0024-portal-without-accounts.md)), so no string in the app sends the user to one. The links are an offer, never a wall. The sidebar footer carries one status row: green for `active`, red for every state that leaves plugins locked.
 
 ## The compiled key
 

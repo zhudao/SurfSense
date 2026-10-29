@@ -24,9 +24,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { TypewriterText } from "@/components/typewriter-text"
+import type { Dictation } from "@/features/dictation/dictation-adapter"
 import type { ModelSelection } from "@/features/models/selection/api"
 import { useStableCallback } from "@/hooks/use-stable-callback"
 import { intl } from "@/i18n/intl"
+import type { PluginsStart } from "@/features/plugins/plugins-settings"
 import type { ChatThread } from "./api"
 import { ChatComposer } from "./chat-composer"
 import { ChatViewport } from "./chat-viewport"
@@ -105,7 +107,7 @@ function useMessageRenderer({
 function ThreadWelcome({ composer }: { composer: ReactNode }) {
   return (
     <div className="flex min-h-0 flex-1">
-      <div className="mx-auto grid h-full w-full max-w-2xl grid-rows-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+      <div className="mx-auto grid h-full w-full max-w-3xl grid-rows-[minmax(0,1fr)_auto_minmax(0,1fr)]">
         <div />
         {composer}
       </div>
@@ -113,11 +115,23 @@ function ThreadWelcome({ composer }: { composer: ReactNode }) {
   )
 }
 
-function ComposerDraftLifecycle({ view }: { view: ConversationView }) {
+function ComposerDraftLifecycle({
+  view,
+  dictation,
+}: {
+  view: ConversationView
+  dictation?: Dictation
+}) {
   const aui = useAui()
   const conversationId =
     view.status === "active" ? `thread:${view.threadId}` : view.status
-  const returned = view.status === "new" ? view.returned : undefined
+  const returned = view.status === "creating" ? undefined : view.returned
+
+  // Voice input outlives the composer, so it is cancelled, never stopped: no
+  // late phrase lands in the thread opened next.
+  useEffect(() => {
+    dictation?.cancel()
+  }, [dictation, conversationId])
 
   useEffect(() => {
     if (conversationId === "creating") {
@@ -164,6 +178,9 @@ export function ThreadPanel({
   onDelete,
   onUploadSources,
   isUploadingSources,
+  onOpenPlugins,
+  dictation,
+  onOpenSpeechSettings,
 }: {
   live: LiveThreadSource
   thread: ChatThread | null
@@ -187,6 +204,12 @@ export function ThreadPanel({
   onDelete: (id: number) => Promise<void>
   onUploadSources?: (files: File[]) => void
   isUploadingSources?: boolean
+  // Opens Settings › Plugins, from the composer's add menu.
+  onOpenPlugins?: (start?: PluginsStart) => void
+  // The runtime's dictation adapter, for the composer's mic.
+  dictation?: Dictation
+  // Opens Settings › Speech recognition, from the mic's set-up.
+  onOpenSpeechSettings?: () => void
 }) {
   const titleInputRef = useRef<HTMLInputElement>(null)
   const headingId = useId()
@@ -224,6 +247,9 @@ export function ThreadPanel({
         thread == null ? null : thread.uses_agent ? "agentic" : "basic"
       }
       onNewChat={onNewChat}
+      onOpenPlugins={onOpenPlugins}
+      dictation={dictation}
+      onOpenSpeechSettings={onOpenSpeechSettings}
     />
   )
   const bottomFooter = bottomComposer ? composer("bottom") : undefined
@@ -266,7 +292,7 @@ export function ThreadPanel({
   // runtime alone, which hands React these same elements, so it skips them.
   return (
     <LiveThreadRuntime {...live}>
-      <ComposerDraftLifecycle view={view} />
+      <ComposerDraftLifecycle view={view} dictation={dictation} />
       <section
         className="flex h-full min-w-0 flex-col bg-background"
         aria-label={intl.formatMessage({
@@ -315,10 +341,11 @@ export function ThreadPanel({
               className="max-w-lg min-w-0"
             >
               <Button
+                static
                 type="button"
                 variant="ghost"
                 disabled={!canRename}
-                className="h-auto max-w-full min-w-0 px-1.5 py-0 font-heading text-base font-medium active:translate-y-0"
+                className="h-auto max-w-full min-w-0 px-1.5 py-0 font-heading text-base font-medium"
                 onClick={startEditing}
               >
                 <span className="sidebar-row-title-fade min-w-0 overflow-hidden whitespace-nowrap">
@@ -395,7 +422,7 @@ export function ThreadPanel({
         <ThreadPrimitive.Root className="relative flex min-h-0 flex-1 flex-col">
           <ChatViewport footer={bottomFooter} footerHasNotice={notice != null}>
             {isLoading ? (
-              <div className="mx-auto flex w-full max-w-xl flex-col">
+              <div className="mx-auto flex w-full max-w-2xl flex-col">
                 <div className="flex flex-col items-end px-6 py-3">
                   <Skeleton className="h-10 w-[42%] rounded-2xl rounded-br-md" />
                 </div>

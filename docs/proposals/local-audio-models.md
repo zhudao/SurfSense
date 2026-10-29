@@ -6,7 +6,7 @@ code:
   - surfsense_local/backend/modules/artifacts/podcast/
   - surfsense_local/backend/scripts/local_manifest/
   - surfsense_local/backend/alembic/versions/
-  - surfsense_local/electron/src/main/sidecars/
+  - surfsense_local/sidecars/
   - surfsense_local/electron/scripts/
   - .github/workflows/
   - surfsense_local/frontend/src/features/models/
@@ -28,7 +28,7 @@ This extends the local catalog ([`catalog.md`](../architecture/local-models/cata
 | Podcast gate | `requires_voice`, "Needs a voice model" | `audio_gen` among the format's required model types, "Needs an audio model" |
 | Voices | a list hard-coded in `providers/kokoro/provider.py` | each model's roster, committed in the manifest |
 
-The installer loses the 340 MB of Kokoro weights and three Python packages, and gains the sidecar. A podcast needs one download first, so the root README's two lines that say the podcast voice ships inside the installer change with the step that removes it.
+The installer loses the 340 MB of Kokoro weights and three Python packages, and gains the sidecar. A podcast needs one download first, so the root README's Podcast row, "voiced on your machine by default", and its translations are re-checked with the step that removes it; the lines that said the voice ships inside the installer went in the 9 Oct 2026 rewrite (#2212).
 
 ## Why audio.cpp
 
@@ -219,7 +219,7 @@ Supertonic has no chunk setting, so it commits a peak and no steps; Kitten's ste
 
 ## What goes
 
-`providers/kokoro/`, `scripts/fetch_kokoro_model.py`, `kokoro-onnx`, and `kokoro_onnx`, `espeakng_loader` and `phonemizer` from [`worker.spec`](../../surfsense_local/backend/bundling/worker.spec). onnxruntime stays for the retrieval model. Podcasts already made keep their audio: an artifact stores its WAV.
+`providers/kokoro/`, `scripts/fetch_kokoro_model.py`, `kokoro-onnx`, and `kokoro_onnx`, `espeakng_loader` and `phonemizer` from [`worker_inputs.py`](../../surfsense_local/backend/bundling/worker_inputs.py). onnxruntime stays for the retrieval model. Podcasts already made keep their audio: an artifact stores its WAV.
 
 ## Order of work
 
